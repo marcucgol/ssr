@@ -89,6 +89,15 @@ function saveTEP(rows) {
   xlsx.writeFile(wb, path.join(__dirname, 'TEP.xlsx'));
 }
 
+function loadCombined(sheet = 'MainData') {
+  const file = path.join(__dirname, 'combined_output.xlsx');
+  if (!existsSync(file)) return [];
+  const wb = xlsx.readFile(file);
+  const sh = wb.Sheets[sheet] || wb.Sheets[wb.SheetNames[0]];
+  if (!sh) return [];
+  return xlsx.utils.sheet_to_json(sh, { defval: '' });
+}
+
 // Все колонки и фильтрация пустых
 const cols = [
   'Type','Name','Name2',
@@ -427,6 +436,38 @@ app.get('/combined', (req, res) => {
   res.download(path.join(__dirname, 'combined_output.xlsx'));
 });
 
+// Просмотр содержимого combined_output.xlsx
+app.get('/view-combined', (req, res) => {
+  const rows = loadCombined();
+  if (!rows.length) return res.send('<p>Файл combined_output.xlsx не найден</p>');
+  const headers = Object.keys(rows[0]);
+  const head = headers.map(h => `<th>${esc(h)}</th>`).join('');
+  const body = rows.map(r =>
+    `<tr>${headers.map(h => `<td>${esc(r[h])}</td>`).join('')}</tr>`
+  ).join('');
+  res.send(`<!DOCTYPE html>
+  <html lang="ru">
+  <head>
+    <meta charset="UTF-8">
+    <title>combined_output.xlsx</title>
+    <link rel="stylesheet" href="/static/style.css">
+  </head>
+  <body>
+    <div class="container">
+      <div class="header"><h1>combined_output.xlsx</h1>
+        <a class="btn" href="/">На главную</a>
+        <a class="btn" href="/combined">Скачать</a>
+      </div>
+      <div class="table-wrapper">
+        <table class="table">
+          <thead><tr>${head}</tr></thead>
+          <tbody>${body}</tbody>
+        </table>
+      </div>
+    </div>
+  </body></html>`);
+});
+
 // Главная страница
 app.get('/', (req, res) => {
   res.send(`<!DOCTYPE html>
@@ -489,6 +530,7 @@ app.get('/', (req, res) => {
       <a class="btn" href="/edit-nlsr">Править NLSR</a>
       <a class="btn" href="/edit-tep">Править TEP</a>
       <a class="btn" href="/combined">Скачать Excel</a>
+      <a class="btn" href="/view-combined">Просмотр Excel</a>
     </div>
     <div class="filters">
       ${Object.entries(keyMap).map(([id,key]) => `
