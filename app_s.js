@@ -39,9 +39,11 @@ const displayNames = {
 
 // Функция чтения данных из Excel
 function loadData() {
-  const workbook  = xlsx.readFile(path.join(__dirname, 'combined_output.xlsx'));
+  const file = path.join(__dirname, 'combined_output.xlsx');
+  if (!existsSync(file)) return [];
+  const workbook  = xlsx.readFile(file);
   const sheetName = 'GroupedData';
-  if (!workbook.Sheets[sheetName]) throw new Error(`Лист "${sheetName}" не найден`);
+  if (!workbook.Sheets[sheetName]) return [];
   const sheet = workbook.Sheets[sheetName];
   const rows  = xlsx.utils.sheet_to_json(sheet, { defval: '' });
   return rows.filter(r =>
@@ -479,6 +481,10 @@ app.get('/', (req, res) => {
 
     document.addEventListener('DOMContentLoaded', () => {
       fetch('/data').then(r=>r.json()).then(json=>{
+        if (json.error) {
+          document.body.innerHTML = '<p style="color:red">' + json.error + '</p>';
+          return;
+        }
         allData = json;
         Object.entries(keyMap).forEach(([id, key]) => {
           const container = document.getElementById('checkboxes-' + id);
