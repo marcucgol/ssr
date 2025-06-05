@@ -147,9 +147,19 @@ app.get('/edit-nlsr', (req, res) => {
   </head>
   <body>
     <div class="container">
-      <div class="header"><h1>NLSR.xlsx</h1><a class="btn" href="/">На главную</a></div>
+      <div class="header">
+        <h1>NLSR.xlsx</h1>
+        <div>
+          <a class="btn" href="/">На главную</a>
+          <a class="btn" href="/download-nlsr">Скачать</a>
+        </div>
+      </div>
+      <form id="uploadForm" method="post" enctype="multipart/form-data" action="/upload-nlsr" style="margin-bottom:10px">
+        <input type="file" name="file" accept=".xlsx" required>
+        <button type="submit" class="btn">Загрузить</button>
+      </form>
       <button id="addRow" class="btn">Добавить строку</button>
-      <table class="table" id="editTable"></table>
+      <div class="table-wrapper"><table class="table" id="editTable"></table></div>
       <button id="addRowBottom" class="btn">Добавить строку</button>
       <button id="saveBtn" class="btn">Сохранить</button>
     </div>
@@ -204,9 +214,19 @@ app.get('/edit-tep', (req, res) => {
   </head>
   <body>
     <div class="container">
-      <div class="header"><h1>TEP.xlsx</h1><a class="btn" href="/">На главную</a></div>
+      <div class="header">
+        <h1>TEP.xlsx</h1>
+        <div>
+          <a class="btn" href="/">На главную</a>
+          <a class="btn" href="/download-tep">Скачать</a>
+        </div>
+      </div>
+      <form id="uploadForm" method="post" enctype="multipart/form-data" action="/upload-tep" style="margin-bottom:10px">
+        <input type="file" name="file" accept=".xlsx" required>
+        <button type="submit" class="btn">Загрузить</button>
+      </form>
       <button id="addRow" class="btn">Добавить строку</button>
-      <table class="table" id="editTable"></table>
+      <div class="table-wrapper"><table class="table" id="editTable"></table></div>
       <button id="addRowBottom" class="btn">Добавить строку</button>
       <button id="saveBtn" class="btn">Сохранить</button>
     </div>
@@ -420,6 +440,20 @@ app.post('/api/nlsr', (req, res) => {
   catch(e){ console.error(e); res.status(500).json({ error: e.message }); }
 });
 
+// Загрузка и выгрузка NLSR.xlsx
+app.get('/download-nlsr', (req, res) => {
+  const file = path.join(__dirname, 'NLSR.xlsx');
+  existsSync(file) ? res.download(file) : res.status(404).send('NLSR.xlsx not found');
+});
+
+app.post('/upload-nlsr', (req, res) => {
+  if (!req.files || !req.files.file) return res.status(400).send('Нет файла');
+  req.files.file.mv(path.join(__dirname, 'NLSR.xlsx'), err => {
+    if (err) return res.status(500).send('Ошибка загрузки');
+    res.redirect('/edit-nlsr');
+  });
+});
+
 // API TEP.xlsx
 app.get('/api/tep', (req, res) => {
   try { res.json(loadTEP()); }
@@ -429,6 +463,20 @@ app.get('/api/tep', (req, res) => {
 app.post('/api/tep', (req, res) => {
   try { saveTEP(req.body.rows || []); res.json({ status: 'ok' }); }
   catch(e){ console.error(e); res.status(500).json({ error: e.message }); }
+});
+
+// Загрузка и выгрузка TEP.xlsx
+app.get('/download-tep', (req, res) => {
+  const file = path.join(__dirname, 'TEP.xlsx');
+  existsSync(file) ? res.download(file) : res.status(404).send('TEP.xlsx not found');
+});
+
+app.post('/upload-tep', (req, res) => {
+  if (!req.files || !req.files.file) return res.status(400).send('Нет файла');
+  req.files.file.mv(path.join(__dirname, 'TEP.xlsx'), err => {
+    if (err) return res.status(500).send('Ошибка загрузки');
+    res.redirect('/edit-tep');
+  });
 });
 
 // Выдача готового Excel
