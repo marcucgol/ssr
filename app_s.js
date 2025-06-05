@@ -78,7 +78,6 @@ app.get('/generate', async (req, res) => {
     res.status(500).json({ error: e.message });
   }
 });
-
 // Рекурсивный список файлов в папке
 function listFiles(dir, prefix = '') {
   if (!fs.existsSync(dir)) return [];
