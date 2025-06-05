@@ -506,7 +506,7 @@ app.get('/view-combined', (req, res) => {
         <a class="btn" href="/">На главную</a>
         <a class="btn" href="/combined">Скачать</a>
       </div>
-      <div class="table-wrapper">
+      <div class="table-wrapper wide">
         <table class="table">
           <thead><tr>${head}</tr></thead>
           <tbody>${body}</tbody>

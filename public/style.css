@@ -5,6 +5,7 @@ body { background: #f0f2f5; margin: 0; padding: 20px; font-family: Arial, sans-s
 .btn { margin-left: 10px; padding: 5px 10px; border: 1px solid #888; background: #eee; border-radius: 3px; text-decoration: none; color: #000; }
 .table-wrapper { overflow-x: auto; }
 .table { width: 100%; border-collapse: collapse; }
+.wide table { width: auto; min-width: max-content; }
 th, td { border: 1px solid #ddd; padding: 8px; text-align: left; }
 th { background: #4CAF50; color: #fff; }
 tr:nth-child(even) { background: #f9f9f9; }
