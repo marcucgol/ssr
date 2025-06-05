@@ -1,9 +1,14 @@
 const express = require('express');
 const path    = require('path');
+const fs      = require('fs');
 const xlsx    = require('xlsx');
+const fileUpload = require('express-fileupload');
+const { main: generateData } = require('./Itog2');
 
 const app  = express();
 const PORT = 2500;
+app.use(express.json());
+app.use(fileUpload());
 
 // Отображаемые имена столбцов
 const displayNames = {
@@ -20,12 +25,17 @@ const displayNames = {
   Kvadrat:      'Квадрат'
 };
 
-// Читаем Excel
-const workbook  = xlsx.readFile(path.join(__dirname, 'combined_output.xlsx'));
-const sheetName = 'GroupedData';
-if (!workbook.Sheets[sheetName]) throw new Error(`Лист "${sheetName}" не найден`);
-const sheet = workbook.Sheets[sheetName];
-const rows  = xlsx.utils.sheet_to_json(sheet, { defval: '' });
+// Функция чтения данных из Excel
+function loadData() {
+  const workbook  = xlsx.readFile(path.join(__dirname, 'combined_output.xlsx'));
+  const sheetName = 'GroupedData';
+  if (!workbook.Sheets[sheetName]) throw new Error(`Лист "${sheetName}" не найден`);
+  const sheet = workbook.Sheets[sheetName];
+  const rows  = xlsx.utils.sheet_to_json(sheet, { defval: '' });
+  return rows.filter(r =>
+    cols.every(c => (r[c] ?? '').toString().trim() !== '')
+  );
+}
 
 // Все колонки и фильтрация пустых
 const cols = [
@@ -33,9 +43,6 @@ const cols = [
   'Num 1','Num 2','НЛСР группа',
   'Year','Quarter','всего','TEP','Kvadrat'
 ];
-const data = rows.filter(r =>
-  cols.every(c => (r[c] ?? '').toString().trim() !== '')
-);
 
 // Фильтруемые столбцы (без «всего», «TEП», «Kvadrat»)
 const filterCols = cols.filter(c => !['всего','TEP','Kvadrat'].includes(c));
@@ -49,7 +56,118 @@ filterCols.forEach(c => {
 app.use('/static', express.static(path.join(__dirname, 'public')));
 
 // API для данных
-app.get('/data', (req, res) => res.json(data));
+app.get('/data', (req, res) => {
+  try {
+    res.json(loadData());
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// Запуск обработки .gge и обновления Excel
+app.get('/generate', async (req, res) => {
+  try {
+    await generateData();
+    res.json({ status: 'ok' });
+  } catch (e) {
+    console.error(e);
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// Загрузка новых .gge файлов в папку "Объекты"
+app.get('/upload', (req, res) => {
+  res.send(`<!DOCTYPE html>
+  <html lang="ru">
+  <head><meta charset="UTF-8"><title>Загрузка объектов</title></head>
+  <body>
+    <h1>Добавить объекты</h1>
+    <form method="post" enctype="multipart/form-data">
+      <input type="file" name="files" multiple required>
+      <button type="submit">Загрузить</button>
+    </form>
+    <p><a href="/">Назад</a></p>
+  </body></html>`);
+});
+
+app.post('/upload', (req, res) => {
+  if (!req.files || !req.files.files) {
+    return res.status(400).send('Нет файлов');
+  }
+  const dir = path.join(__dirname, 'Объекты');
+  if (!fs.existsSync(dir)) fs.mkdirSync(dir);
+  const files = Array.isArray(req.files.files) ? req.files.files : [req.files.files];
+  files.forEach(f => f.mv(path.join(dir, f.name)));
+  res.send('Файлы загружены. <a href="/">На главную</a>');
+});
+
+// Сохранение изменений группы и ТЭП
+app.post('/api/save', (req, res) => {
+  try {
+    const { rows } = req.body;
+    const file = path.join(__dirname, 'combined_output.xlsx');
+    const wb = xlsx.readFile(file);
+    const sheetName = 'GroupedData';
+    const data = xlsx.utils.sheet_to_json(wb.Sheets[sheetName], { defval: '' });
+    rows.forEach(r => {
+      const row = data[r.index];
+      if (row) {
+        row['НЛСР группа'] = r.group;
+        row['TEP'] = r.TEP;
+      }
+    });
+    wb.Sheets[sheetName] = xlsx.utils.json_to_sheet(data);
+    xlsx.writeFile(wb, file);
+    res.json({ status: 'ok' });
+  } catch (e) {
+    console.error(e);
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// Выдача готового Excel
+app.get('/combined', (req, res) => {
+  res.download(path.join(__dirname, 'combined_output.xlsx'));
+});
+
+// Страница редактирования групп и ТЭП
+app.get('/edit', (req, res) => {
+  res.send(`<!DOCTYPE html>
+  <html lang="ru">
+  <head><meta charset="UTF-8"><title>Редактор данных</title></head>
+  <body>
+    <h1>Правка групп и ТЭП</h1>
+    <table border="1" id="editTable"></table>
+    <button id="saveBtn">Сохранить</button>
+    <p><a href="/">Назад</a></p>
+    <script>
+      let data=[];
+      fetch('/data').then(r=>r.json()).then(json=>{
+        data=json;
+        const table=document.getElementById('editTable');
+        table.innerHTML='<tr><th>#</th><th>Название</th><th>Доп.</th><th>Группа</th><th>ТЭП</th></tr>';
+        json.forEach((row,i)=>{
+          const tr=document.createElement('tr');
+          tr.dataset.index=i;
+          tr.innerHTML=\`<td>${i+1}</td><td>${row.Name}</td><td>${row.Name2}</td>
+            <td><input value="${row['НЛСР группа']||''}"></td>
+            <td><input value="${row.TEP||''}"></td>\`;
+          table.appendChild(tr);
+        });
+      });
+      document.getElementById('saveBtn').onclick=()=>{
+        const rows=[];
+        document.querySelectorAll('#editTable tr[data-index]').forEach(tr=>{
+          rows.push({index:Number(tr.dataset.index),
+            group:tr.children[3].firstChild.value,
+            TEP:tr.children[4].firstChild.value});
+        });
+        fetch('/api/save',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({rows})})
+          .then(r=>r.json()).then(()=>alert('Сохранено'));
+      };
+    </script>
+  </body></html>`);
+});
 
 // Главная страница
 app.get('/', (req, res) => {
@@ -80,6 +198,16 @@ app.get('/', (req, res) => {
       flex: 1; margin: 0 2px; padding: 4px; font-size: 0.9em;
       border: 1px solid #888; background: #eee; border-radius: 3px; cursor: pointer;
     }
+    #generateBtn {
+      margin-left: 10px; padding: 5px 10px;
+      border: 1px solid #888; background: #eee;
+      border-radius: 3px; cursor: pointer;
+    }
+    .btn {
+      margin-left: 10px; padding: 5px 10px;
+      border: 1px solid #888; background: #eee;
+      border-radius: 3px; text-decoration: none; color: #000;
+    }
     .checkboxes label { display: block; margin-bottom: 3px; }
     .table-wrapper { overflow-x: auto; }
     table { width: 100%; min-width: 1400px; border-collapse: collapse; }
@@ -98,6 +226,10 @@ app.get('/', (req, res) => {
       <div class="stats">
         Среднее ${displayNames.Kvadrat}: <span id="avgKvadrat">0.00</span>
       </div>
+      <button id="generateBtn">Обновить данные</button>
+      <a class="btn" href="/upload">Добавить объекты</a>
+      <a class="btn" href="/edit">Править данные</a>
+      <a class="btn" href="/combined">Скачать Excel</a>
     </div>
     <div class="filters">
       ${Object.entries(keyMap).map(([id,key]) => `
@@ -151,6 +283,9 @@ app.get('/', (req, res) => {
           });
         });
         renderTable();
+      });
+      document.getElementById('generateBtn').addEventListener('click', () => {
+        fetch('/generate').then(r=>r.json()).then(()=>location.reload());
       });
       document.addEventListener('click', e => {
         Object.keys(keyMap).forEach(id => {
