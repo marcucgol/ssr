@@ -1,0 +1,21 @@
+{
+  "name": "ssr",
+  "version": "1.0.0",
+  "description": "",
+  "main": "Itog2.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type": "commonjs",
+  "dependencies": {
+    "exceljs": "^4.4.0",
+    "express": "^5.1.0",
+    "express-fileupload": "^1.4.0",
+    "xlsx": "^0.18.5",
+    "xml2js": "^0.6.2",
+    "ssh2": "^1.16.0"
+  }
+}
