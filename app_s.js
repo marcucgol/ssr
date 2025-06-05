@@ -54,12 +54,20 @@ function loadNLSR() {
   if (!existsSync(file)) return [];
   const wb = xlsx.readFile(file);
   const sh = wb.Sheets[wb.SheetNames[0]];
-  return xlsx.utils.sheet_to_json(sh, { defval: '' });
+  return xlsx.utils
+    .sheet_to_json(sh, { defval: '' })
+    .filter(r => Object.values(r).some(v => String(v).trim() !== ''));
 }
 
 function saveNLSR(rows) {
+  const clean = rows
+    .map(r => ({
+      Name: (r.Name || '').trim(),
+      Keyword: (r.Keyword || '').trim()
+    }))
+    .filter(r => r.Name !== '' || r.Keyword !== '');
   const wb = xlsx.utils.book_new();
-  const ws = xlsx.utils.json_to_sheet(rows);
+  const ws = xlsx.utils.json_to_sheet(clean);
   xlsx.utils.book_append_sheet(wb, ws, 'Sheet1');
   xlsx.writeFile(wb, path.join(__dirname, 'NLSR.xlsx'));
 }
