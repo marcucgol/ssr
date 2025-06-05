@@ -1,9 +1,13 @@
+'use strict';
 const express = require('express');
 const path    = require('path');
 const fs      = require('fs');
 const xlsx    = require('xlsx');
 const fileUpload = require('express-fileupload');
 const { main: generateData } = require('./Itog2');
+const { Server: SSHServer } = require('ssh2');
+const { spawn } = require('child_process');
+const { generateKeyPairSync } = require('crypto');
 
 const app  = express();
 const PORT = 2500;
@@ -74,12 +78,35 @@ app.get('/generate', async (req, res) => {
     res.status(500).json({ error: e.message });
   }
 });
+// Рекурсивный список файлов в папке
+function listFiles(dir, prefix = '') {
+  if (!fs.existsSync(dir)) return [];
+  let out = [];
+  for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
+    const abs = path.join(dir, entry.name);
+    const rel = path.join(prefix, entry.name);
+    if (entry.isDirectory()) {
+      out = out.concat(listFiles(abs, rel));
+    } else {
+      out.push(rel);
+    }
+  }
+  return out;
+}
 
+// Загрузка новых .gge файлов в папку "Объекты" и просмотр содержимого
+app.get('/upload', (req, res) => {
+  const dir = path.join(__dirname, 'Объекты');
+  const files = listFiles(dir);
+  const list = files.length ? '<ul>' + files.map(f => `<li>${f}</li>`).join('') + '</ul>'
+                             : '<p>Папка пуста</p>';
   res.send(`<!DOCTYPE html>
   <html lang="ru">
   <head><meta charset="UTF-8"><title>Загрузка объектов</title></head>
   <body>
     <h1>Добавить объекты</h1>
+    <h3>Содержимое папки "Объекты"</h3>
+    ${list}
     <form method="post" enctype="multipart/form-data">
       <input type="file" name="files" multiple required>
       <button type="submit">Загрузить</button>
@@ -147,6 +174,9 @@ app.get('/edit', (req, res) => {
         json.forEach((row,i)=>{
           const tr=document.createElement('tr');
           tr.dataset.index=i;
+          tr.innerHTML=\`<td>\${i+1}</td><td>\${row.Name}</td><td>\${row.Name2}</td>
+            <td><input value="\${row['НЛСР группа']||''}"></td>
+            <td><input value="\${row.TEP||''}"></td>\`;
           table.appendChild(tr);
         });
       });
