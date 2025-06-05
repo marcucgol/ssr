@@ -16,6 +16,11 @@ This project processes `.gge` files into Excel and provides a small web interfac
    node app_s.js
    ```
    The web interface will be available at <http://localhost:2500>.
+   Buttons on the main page let you upload new objects, edit NLSR groups or TEP values and download the combined Excel file.
+
+4. **Optional SSH access**
+
+   Run `./ssh_connect.sh` to open a shell (user: `user`, pass: `pass`). The server listens on port `2222`.
 
 4. **Optional SSH access**
 
