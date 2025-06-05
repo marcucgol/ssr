@@ -1,6 +1,6 @@
 # SSR Demo
 
-This project processes `.gge` files into Excel and provides a small web interface for browsing and editing data.
+This project processes `.gge` files into Excel and provides a web interface for browsing and editing data.
 
 ## Usage
 
@@ -17,6 +17,7 @@ This project processes `.gge` files into Excel and provides a small web interfac
    ```
    The web interface will be available at <http://localhost:2500>.
    Buttons on the main page let you upload new objects, edit `NLSR.xlsx` or `TEP.xlsx`, and download the combined Excel file.
+   The upload page shows a collapsible tree of the `Объекты` folder so you can create or remove directories and files visually.
 
 4. **Optional SSH access**
 

@@ -11,3 +11,11 @@ tr:nth-child(even) { background: #f9f9f9; }
 .file-list { list-style: none; padding: 0; }
 .file-list li { margin-bottom: 5px; }
 .file-list form { display: inline; margin-left: 10px; }
+.file-tree, .file-tree ul { list-style: none; padding-left: 20px; }
+.file-tree li { margin: 2px 0; }
+.file-tree .folder > span { cursor: pointer; }
+.file-tree .folder ul { display: none; }
+.file-tree .folder.open > ul { display: block; }
+.file-tree .folder::before { content: '\25B6'; display: inline-block; width: 1em; }
+.file-tree .folder.open::before { content: '\25BC'; }
+td[contenteditable] { background: #fffdd0; min-width: 80px; }

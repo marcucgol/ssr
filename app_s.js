@@ -16,6 +16,12 @@ app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 app.use(fileUpload());
 
+function esc(str) {
+  return String(str).replace(/[&<>"']/g, ch => ({
+    '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;','\'':'&#39;'
+  }[ch]));
+}
+
 // Отображаемые имена столбцов
 const displayNames = {
   Type:         'Тип',
@@ -133,22 +139,30 @@ app.get('/edit-nlsr', (req, res) => {
         table.innerHTML='<tr><th>Name</th><th>Keyword</th></tr>';
         json.forEach(row=>{
           const tr=document.createElement('tr');
-          tr.innerHTML='<td><input value="'+(row.Name||'')+'"></td>'+
-                      '<td><input value="'+(row.Keyword||'')+'"></td>';
+          ['Name','Keyword'].forEach(k=>{
+            const td=document.createElement('td');
+            td.contentEditable='true';
+            td.textContent=row[k]||'';
+            tr.appendChild(td);
+          });
           table.appendChild(tr);
         });
       });
       document.getElementById('addRow').onclick=()=>{
         const tr=document.createElement('tr');
-        tr.innerHTML='<td><input></td><td><input></td>';
+        ['',''].forEach(()=>{
+          const td=document.createElement('td');
+          td.contentEditable='true';
+          tr.appendChild(td);
+        });
         document.getElementById('editTable').appendChild(tr);
       };
       document.getElementById('saveBtn').onclick=()=>{
         const rows=[];
         document.querySelectorAll('#editTable tr').forEach((tr,i)=>{
           if(i===0) return;
-          const t=tr.querySelectorAll('input');
-          rows.push({Name:t[0].value,Keyword:t[1].value});
+          const t=tr.querySelectorAll('td');
+          rows.push({Name:t[0].textContent.trim(),Keyword:t[1].textContent.trim()});
         });
         fetch('/api/nlsr',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({rows})})
           .then(r=>r.json()).then(()=>alert('Сохранено'));
@@ -179,25 +193,31 @@ app.get('/edit-tep', (req, res) => {
         table.innerHTML='<tr><th>Type</th><th>Name</th><th>Num 1</th><th>Num 2</th><th>Tep</th></tr>';
         json.forEach(row=>{
           const tr=document.createElement('tr');
-          tr.innerHTML='<td><input value="'+(row.Type||'')+'"></td>'+
-                      '<td><input value="'+(row.Name||'')+'"></td>'+
-                      '<td><input value="'+(row["Num 1"]||'')+'"></td>'+
-                      '<td><input value="'+(row["Num 2"]||'')+'"></td>'+
-                      '<td><input value="'+(row.Tep||'')+'"></td>';
+          ['Type','Name','Num 1','Num 2','Tep'].forEach(k=>{
+            const td=document.createElement('td');
+            td.contentEditable='true';
+            td.textContent=row[k]||'';
+            tr.appendChild(td);
+          });
           table.appendChild(tr);
         });
       });
       document.getElementById('addRow').onclick=()=>{
         const tr=document.createElement('tr');
-        tr.innerHTML='<td><input></td><td><input></td><td><input></td><td><input></td><td><input></td>';
+        ['','','','',''].forEach(()=>{
+          const td=document.createElement('td');
+          td.contentEditable='true';
+          tr.appendChild(td);
+        });
         document.getElementById('editTable').appendChild(tr);
       };
       document.getElementById('saveBtn').onclick=()=>{
         const rows=[];
         document.querySelectorAll('#editTable tr').forEach((tr,i)=>{
           if(i===0) return;
-          const t=tr.querySelectorAll('input');
-          rows.push({Type:t[0].value,Name:t[1].value,'Num 1':t[2].value,'Num 2':t[3].value,Tep:t[4].value});
+          const t=tr.querySelectorAll('td');
+          rows.push({Type:t[0].textContent.trim(),Name:t[1].textContent.trim(),
+            'Num 1':t[2].textContent.trim(),'Num 2':t[3].textContent.trim(),Tep:t[4].textContent.trim()});
         });
         fetch('/api/tep',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({rows})})
           .then(r=>r.json()).then(()=>alert('Сохранено'));
@@ -215,17 +235,14 @@ function listDirHtml(base, sub = '') {
   let html = '';
   for (const e of entries) {
     const rel = path.join(sub, e.name);
+    const del = `<form style="display:inline" method="post" action="/delete" onsubmit="return confirm('Удалить ${esc(rel)}?')">`+
+                `<input type="hidden" name="file" value="${esc(rel)}">`+
+                `<button type="submit">Удалить</button></form>`;
     if (e.isDirectory()) {
-      html += `<li><strong>${e.name}/</strong>` +
-        `<form style="display:inline" method="post" action="/delete" onsubmit="return confirm('Удалить ${rel}?')">`+
-        `<input type="hidden" name="file" value="${rel}">`+
-        `<button type="submit">Удалить</button></form>`+
-        `<ul>` + listDirHtml(base, rel) + `</ul></li>`;
+      html += `<li class="folder"><span>${esc(e.name)}</span> ${del}`+
+              `<ul>` + listDirHtml(base, rel) + `</ul></li>`;
     } else {
-      html += `<li>${e.name}`+
-        `<form style="display:inline" method="post" action="/delete" onsubmit="return confirm('Удалить ${rel}?')">`+
-        `<input type="hidden" name="file" value="${rel}">`+
-        `<button type="submit">Удалить</button></form></li>`;
+      html += `<li class="file">${esc(e.name)} ${del}</li>`;
     }
   }
   return html;
@@ -256,6 +273,13 @@ app.get('/upload', (req, res) => {
           <input type="text" name="dir" placeholder="Новая папка" required>
           <button type="submit" class="btn">Создать папку</button>
         </form>
+      <script>
+        document.querySelectorAll('.file-tree .folder > span').forEach(s => {
+          s.addEventListener('click', () => {
+            s.parentElement.classList.toggle('open');
+          });
+        });
+      </script>
     </div>
   </body></html>`);
 });
