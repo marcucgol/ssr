@@ -442,4 +442,16 @@ async function main() {
   console.log('Создан combined_output.xlsx');
 }
 
-main().catch(err => console.error('Ошибка выполнения:', err));
+async function run() {
+  try {
+    await main();
+  } catch (err) {
+    console.error('Ошибка выполнения:', err);
+  }
+}
+
+if (require.main === module) {
+  run();
+}
+
+module.exports = { main };
