@@ -17,7 +17,8 @@ This project processes `.gge` files into Excel and provides a web interface for 
    ```
    The web interface will be available at <http://localhost:2500>.
    Buttons on the main page let you upload new objects, edit `NLSR.xlsx` or `TEP.xlsx`, and download the combined Excel file.
-    The upload page opens a simple file explorer for the `Объекты` folder so you can navigate, create folders and upload files visually.
+  The upload page opens a file explorer for the `Объекты` folder. Use the toggle to switch between a grid of icons and a simple list view, create folders and upload files visually.
+   The NLSR and TEP editors include “Добавить строку” buttons above and below the table for quick entry.
 
 4. **Optional SSH access**
 

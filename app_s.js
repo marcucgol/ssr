@@ -141,6 +141,7 @@ app.get('/edit-nlsr', (req, res) => {
       <div class="header"><h1>NLSR.xlsx</h1><a class="btn" href="/">На главную</a></div>
       <button id="addRow" class="btn">Добавить строку</button>
       <table class="table" id="editTable"></table>
+      <button id="addRowBottom" class="btn">Добавить строку</button>
       <button id="saveBtn" class="btn">Сохранить</button>
     </div>
     <script>
@@ -158,7 +159,7 @@ app.get('/edit-nlsr', (req, res) => {
           table.appendChild(tr);
         });
       });
-      document.getElementById('addRow').onclick=()=>{
+      function addRow(){
         const tr=document.createElement('tr');
         ['',''].forEach(()=>{
           const td=document.createElement('td');
@@ -166,7 +167,9 @@ app.get('/edit-nlsr', (req, res) => {
           tr.appendChild(td);
         });
         document.getElementById('editTable').appendChild(tr);
-      };
+      }
+      document.getElementById('addRow').onclick=addRow;
+      document.getElementById('addRowBottom').onclick=addRow;
       document.getElementById('saveBtn').onclick=()=>{
         const rows=[];
         document.querySelectorAll('#editTable tr').forEach((tr,i)=>{
@@ -195,6 +198,7 @@ app.get('/edit-tep', (req, res) => {
       <div class="header"><h1>TEP.xlsx</h1><a class="btn" href="/">На главную</a></div>
       <button id="addRow" class="btn">Добавить строку</button>
       <table class="table" id="editTable"></table>
+      <button id="addRowBottom" class="btn">Добавить строку</button>
       <button id="saveBtn" class="btn">Сохранить</button>
     </div>
     <script>
@@ -212,7 +216,7 @@ app.get('/edit-tep', (req, res) => {
           table.appendChild(tr);
         });
       });
-      document.getElementById('addRow').onclick=()=>{
+      function addRow(){
         const tr=document.createElement('tr');
         ['','','','',''].forEach(()=>{
           const td=document.createElement('td');
@@ -220,7 +224,9 @@ app.get('/edit-tep', (req, res) => {
           tr.appendChild(td);
         });
         document.getElementById('editTable').appendChild(tr);
-      };
+      }
+      document.getElementById('addRow').onclick=addRow;
+      document.getElementById('addRowBottom').onclick=addRow;
       document.getElementById('saveBtn').onclick=()=>{
         const rows=[];
         document.querySelectorAll('#editTable tr').forEach((tr,i)=>{
@@ -259,7 +265,7 @@ function listDirHtml(base, sub = '') {
 }
 
 // Генерация HTML для одной папки в виде сетки
-function listDirGrid(base, sub = '') {
+function listDirGrid(base, sub = '', view = 'grid') {
   const dir = path.join(base, sub);
   if (!existsSync(dir)) return '';
   const entries = readdirSync(dir, { withFileTypes: true })
@@ -270,10 +276,11 @@ function listDirGrid(base, sub = '') {
     const del = `<form method="post" action="/delete" onsubmit="return confirm('Удалить ${esc(rel)}?')">`+
                 `<input type="hidden" name="file" value="${esc(rel)}">`+
                 `<input type="hidden" name="dir" value="${esc(sub)}">`+
+                `<input type="hidden" name="view" value="${esc(view)}">`+
                 `<button type="submit">Удалить</button></form>`;
     if (e.isDirectory()) {
       html += `<div class="item folder">`+
-              `<a href="/upload?dir=${encodeURIComponent(rel)}" class="icon">📁</a>`+
+              `<a href="/upload?dir=${encodeURIComponent(rel)}&view=${view}" class="icon">📁</a>`+
               `<div class="name">${esc(e.name)}</div>`+
               `${del}</div>`;
     } else {
@@ -288,14 +295,40 @@ function listDirGrid(base, sub = '') {
   return html;
 }
 
+function listDirList(base, sub = '', view = 'list') {
+  const dir = path.join(base, sub);
+  if (!existsSync(dir)) return '';
+  const entries = readdirSync(dir, { withFileTypes: true })
+    .sort((a, b) => a.name.localeCompare(b.name));
+  let html = '<ul class="file-list">';
+  for (const e of entries) {
+    const rel = path.join(sub, e.name);
+    const del = `<form method="post" action="/delete" onsubmit="return confirm('Удалить ${esc(rel)}?')">`+
+                `<input type="hidden" name="file" value="${esc(rel)}">`+
+                `<input type="hidden" name="dir" value="${esc(sub)}">`+
+                `<input type="hidden" name="view" value="${esc(view)}">`+
+                `<button type="submit">Удалить</button></form>`;
+    if (e.isDirectory()) {
+      html += `<li class="folder"><a href="/upload?dir=${encodeURIComponent(rel)}&view=${view}">📁 ${esc(e.name)}</a> ${del}</li>`;
+    } else {
+      const ext = path.extname(e.name).slice(1).toLowerCase();
+      html += `<li class="file" data-ext="${esc(ext)}">📄 ${esc(e.name)} ${del}</li>`;
+    }
+  }
+  html += '</ul>';
+  return html;
+}
+
 // Загрузка новых .gge файлов в папку "Объекты" и просмотр содержимого
 app.get('/upload', (req, res) => {
   const base = path.join(__dirname, 'Объекты');
   const sub  = req.query.dir ? req.query.dir.replace(/\\+/g,'/') : '';
+  const view = req.query.view === 'list' ? 'list' : 'grid';
   const current = path.normalize(path.join(base, sub));
   if (!current.startsWith(base)) return res.status(400).send('Некорректный путь');
   if (!existsSync(current)) mkdirSync(current, { recursive: true });
-  const tree = listDirGrid(base, sub);
+  const tree = view === 'list' ? listDirList(base, sub, view) : listDirGrid(base, sub, view);
+  const toggle = `<a class="btn" href="/upload?dir=${encodeURIComponent(sub)}&view=${view==='grid'?'list':'grid'}">${view==='grid'?'Список':'Квадратики'}</a>`;
     res.send(`<!DOCTYPE html>
   <html lang="ru">
   <head>
@@ -306,15 +339,17 @@ app.get('/upload', (req, res) => {
   <body>
     <div class="container">
       <div class="header"><h1>Добавить объекты</h1><a class="btn" href="/">На главную</a></div>
-      <div>${sub ? `<a class="btn" href="/upload?dir=${encodeURIComponent(path.dirname(sub))}">Назад</a>` : ''}</div>
+      <div class="view-toggle">${sub ? `<a class="btn" href="/upload?dir=${encodeURIComponent(path.dirname(sub))}&view=${view}">Назад</a>` : ''} ${toggle}</div>
       ${tree}
       <form method="post" enctype="multipart/form-data">
         <input type="hidden" name="dir" value="${esc(sub)}">
+        <input type="hidden" name="view" value="${esc(view)}">
         <input type="file" name="files" multiple required>
         <button type="submit" class="btn">Загрузить</button>
       </form>
       <form method="post" action="/mkdir">
         <input type="hidden" name="dir" value="${esc(sub)}">
+        <input type="hidden" name="view" value="${esc(view)}">
         <input type="text" name="name" placeholder="Новая папка" required>
         <button type="submit" class="btn">Создать папку</button>
       </form>
@@ -328,17 +363,19 @@ app.post('/upload', (req, res) => {
   }
   const base = path.join(__dirname, 'Объекты');
   const sub  = req.body.dir ? req.body.dir.replace(/\\+/g,'/') : '';
+  const view = req.body.view === 'list' ? 'list' : 'grid';
   const dir  = path.normalize(path.join(base, sub));
   if (!dir.startsWith(base)) return res.status(400).send('Некорректный путь');
   if (!existsSync(dir)) mkdirSync(dir, { recursive: true });
   const files = Array.isArray(req.files.files) ? req.files.files : [req.files.files];
   files.forEach(f => f.mv(path.join(dir, f.name)));
-  res.redirect('/upload?dir=' + encodeURIComponent(sub));
+  res.redirect('/upload?dir=' + encodeURIComponent(sub) + '&view=' + view);
 });
 
 app.post('/delete', (req, res) => {
   const base = path.join(__dirname, 'Объекты');
   const sub  = req.body.dir ? req.body.dir.replace(/\\+/g,'/') : '';
+  const view = req.body.view === 'list' ? 'list' : 'grid';
   const target = path.normalize(path.join(base, req.body.file || ''));
   if (!target.startsWith(base)) return res.status(400).send('Некорректный путь');
   if (existsSync(target)) {
@@ -346,16 +383,17 @@ app.post('/delete', (req, res) => {
     if (st.isDirectory()) rmSync(target, { recursive: true, force: true });
     else rmSync(target);
   }
-  res.redirect('/upload?dir=' + encodeURIComponent(sub));
+  res.redirect('/upload?dir=' + encodeURIComponent(sub) + '&view=' + view);
 });
 
 app.post('/mkdir', (req, res) => {
   const base = path.join(__dirname, 'Объекты');
   const sub  = req.body.dir ? req.body.dir.replace(/\\+/g,'/') : '';
+  const view = req.body.view === 'list' ? 'list' : 'grid';
   const target = path.normalize(path.join(base, sub, req.body.name || ''));
   if (!target.startsWith(base)) return res.status(400).send('Некорректный путь');
   mkdirSync(target, { recursive: true });
-  res.redirect('/upload?dir=' + encodeURIComponent(sub));
+  res.redirect('/upload?dir=' + encodeURIComponent(sub) + '&view=' + view);
 });
 
 // API NLSR.xlsx
