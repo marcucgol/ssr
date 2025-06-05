@@ -2,6 +2,7 @@
 const express = require('express');
 const path    = require('path');
 const fs      = require('fs');
+const { rmSync, mkdirSync, existsSync, readdirSync, lstatSync } = fs;
 const xlsx    = require('xlsx');
 const fileUpload = require('express-fileupload');
 const { main: generateData } = require('./Itog2');
@@ -40,6 +41,36 @@ function loadData() {
   return rows.filter(r =>
     cols.every(c => (r[c] ?? '').toString().trim() !== '')
   );
+}
+
+function loadNLSR() {
+  const file = path.join(__dirname, 'NLSR.xlsx');
+  if (!existsSync(file)) return [];
+  const wb = xlsx.readFile(file);
+  const sh = wb.Sheets[wb.SheetNames[0]];
+  return xlsx.utils.sheet_to_json(sh, { defval: '' });
+}
+
+function saveNLSR(rows) {
+  const wb = xlsx.utils.book_new();
+  const ws = xlsx.utils.json_to_sheet(rows);
+  xlsx.utils.book_append_sheet(wb, ws, 'Sheet1');
+  xlsx.writeFile(wb, path.join(__dirname, 'NLSR.xlsx'));
+}
+
+function loadTEP() {
+  const file = path.join(__dirname, 'TEP.xlsx');
+  if (!existsSync(file)) return [];
+  const wb = xlsx.readFile(file);
+  const sh = wb.Sheets[wb.SheetNames[0]];
+  return xlsx.utils.sheet_to_json(sh, { defval: '' });
+}
+
+function saveTEP(rows) {
+  const wb = xlsx.utils.book_new();
+  const ws = xlsx.utils.json_to_sheet(rows);
+  xlsx.utils.book_append_sheet(wb, ws, 'Sheet1');
+  xlsx.writeFile(wb, path.join(__dirname, 'TEP.xlsx'));
 }
 
 // Все колонки и фильтрация пустых
@@ -86,35 +117,40 @@ app.get('/edit-nlsr', (req, res) => {
   <html lang="ru">
   <head>
     <meta charset="UTF-8">
-    <title>Редактирование НЛСР</title>
+    <title>Редактирование NLSR.xlsx</title>
     <link rel="stylesheet" href="/static/style.css">
   </head>
   <body>
     <div class="container">
-      <div class="header"><h1>НЛСР группы</h1><a class="btn" href="/">На главную</a></div>
+      <div class="header"><h1>NLSR.xlsx</h1><a class="btn" href="/">На главную</a></div>
+      <button id="addRow" class="btn">Добавить строку</button>
       <table class="table" id="editTable"></table>
       <button id="saveBtn" class="btn">Сохранить</button>
     </div>
     <script>
-      fetch('/data').then(r=>r.json()).then(json=>{
+      fetch('/api/nlsr').then(r=>r.json()).then(json=>{
         const table=document.getElementById('editTable');
-        table.innerHTML='<tr><th>#</th><th>Название</th><th>Доп.</th><th>Группа</th></tr>';
-        json.forEach((row,i)=>{
+        table.innerHTML='<tr><th>Name</th><th>Keyword</th></tr>';
+        json.forEach(row=>{
           const tr=document.createElement('tr');
-          tr.dataset.index=i;
-          tr.innerHTML =
-            '<td>'+(i+1)+'</td><td>'+row.Name+'</td><td>'+row.Name2+'</td>' +
-            '<td><input value="'+(row["НЛСР группа"]||'')+'"></td>';
+          tr.innerHTML='<td><input value="'+(row.Name||'')+'"></td>'+
+                      '<td><input value="'+(row.Keyword||'')+'"></td>';
           table.appendChild(tr);
         });
       });
+      document.getElementById('addRow').onclick=()=>{
+        const tr=document.createElement('tr');
+        tr.innerHTML='<td><input></td><td><input></td>';
+        document.getElementById('editTable').appendChild(tr);
+      };
       document.getElementById('saveBtn').onclick=()=>{
         const rows=[];
-        document.querySelectorAll('#editTable tr[data-index]').forEach(tr=>{
-          rows.push({index:Number(tr.dataset.index),
-            group:tr.children[3].firstChild.value});
+        document.querySelectorAll('#editTable tr').forEach((tr,i)=>{
+          if(i===0) return;
+          const t=tr.querySelectorAll('input');
+          rows.push({Name:t[0].value,Keyword:t[1].value});
         });
-        fetch('/api/save-nlsr',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({rows})})
+        fetch('/api/nlsr',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({rows})})
           .then(r=>r.json()).then(()=>alert('Сохранено'));
       };
     </script>
@@ -127,73 +163,80 @@ app.get('/edit-tep', (req, res) => {
   <html lang="ru">
   <head>
     <meta charset="UTF-8">
-    <title>Редактирование TEP</title>
+    <title>Редактирование TEP.xlsx</title>
     <link rel="stylesheet" href="/static/style.css">
   </head>
   <body>
     <div class="container">
-      <div class="header"><h1>Правка TEP</h1><a class="btn" href="/">На главную</a></div>
+      <div class="header"><h1>TEP.xlsx</h1><a class="btn" href="/">На главную</a></div>
+      <button id="addRow" class="btn">Добавить строку</button>
       <table class="table" id="editTable"></table>
       <button id="saveBtn" class="btn">Сохранить</button>
     </div>
     <script>
-      fetch('/data').then(r=>r.json()).then(json=>{
+      fetch('/api/tep').then(r=>r.json()).then(json=>{
         const table=document.getElementById('editTable');
-        table.innerHTML='<tr><th>#</th><th>Название</th><th>Доп.</th><th>TEP</th></tr>';
-        json.forEach((row,i)=>{
+        table.innerHTML='<tr><th>Type</th><th>Name</th><th>Num 1</th><th>Num 2</th><th>Tep</th></tr>';
+        json.forEach(row=>{
           const tr=document.createElement('tr');
-          tr.dataset.index=i;
-          tr.innerHTML =
-            '<td>'+(i+1)+'</td><td>'+row.Name+'</td><td>'+row.Name2+'</td>' +
-            '<td><input value="'+(row.TEP||'')+'"></td>';
+          tr.innerHTML='<td><input value="'+(row.Type||'')+'"></td>'+
+                      '<td><input value="'+(row.Name||'')+'"></td>'+
+                      '<td><input value="'+(row["Num 1"]||'')+'"></td>'+
+                      '<td><input value="'+(row["Num 2"]||'')+'"></td>'+
+                      '<td><input value="'+(row.Tep||'')+'"></td>';
           table.appendChild(tr);
         });
       });
+      document.getElementById('addRow').onclick=()=>{
+        const tr=document.createElement('tr');
+        tr.innerHTML='<td><input></td><td><input></td><td><input></td><td><input></td><td><input></td>';
+        document.getElementById('editTable').appendChild(tr);
+      };
       document.getElementById('saveBtn').onclick=()=>{
         const rows=[];
-        document.querySelectorAll('#editTable tr[data-index]').forEach(tr=>{
-          rows.push({index:Number(tr.dataset.index),
-            TEP:tr.children[3].firstChild.value});
+        document.querySelectorAll('#editTable tr').forEach((tr,i)=>{
+          if(i===0) return;
+          const t=tr.querySelectorAll('input');
+          rows.push({Type:t[0].value,Name:t[1].value,'Num 1':t[2].value,'Num 2':t[3].value,Tep:t[4].value});
         });
-        fetch('/api/save-tep',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({rows})})
+        fetch('/api/tep',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({rows})})
           .then(r=>r.json()).then(()=>alert('Сохранено'));
       };
     </script>
   </body></html>`);
 });
 
-// Рекурсивный список файлов в папке
-function listFiles(dir, prefix = '') {
-  if (!fs.existsSync(dir)) return [];
-  let out = [];
-  for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
-    const abs = path.join(dir, entry.name);
-    const rel = path.join(prefix, entry.name);
-    if (entry.isDirectory()) {
-      out = out.concat(listFiles(abs, rel));
+// Генерация HTML для дерева файлов
+function listDirHtml(base, sub = '') {
+  const dir = path.join(base, sub);
+  if (!existsSync(dir)) return '';
+  const entries = readdirSync(dir, { withFileTypes: true })
+    .sort((a,b)=>a.name.localeCompare(b.name));
+  let html = '';
+  for (const e of entries) {
+    const rel = path.join(sub, e.name);
+    if (e.isDirectory()) {
+      html += `<li><strong>${e.name}/</strong>` +
+        `<form style="display:inline" method="post" action="/delete" onsubmit="return confirm('Удалить ${rel}?')">`+
+        `<input type="hidden" name="file" value="${rel}">`+
+        `<button type="submit">Удалить</button></form>`+
+        `<ul>` + listDirHtml(base, rel) + `</ul></li>`;
     } else {
-      out.push(rel);
+      html += `<li>${e.name}`+
+        `<form style="display:inline" method="post" action="/delete" onsubmit="return confirm('Удалить ${rel}?')">`+
+        `<input type="hidden" name="file" value="${rel}">`+
+        `<button type="submit">Удалить</button></form></li>`;
     }
   }
-  return out;
+  return html;
 }
 
 // Загрузка новых .gge файлов в папку "Объекты" и просмотр содержимого
 app.get('/upload', (req, res) => {
   const dir = path.join(__dirname, 'Объекты');
-  const files = listFiles(dir);
-  const list = files.length
-    ? '<ul class="file-list">' + files.map(f => {
-        const msg = `return confirm(\"Удалить ${f}?\")`;
-        return `<li>${f}
-           <form method="post" action="/delete" onsubmit="${msg}">
-             <input type="hidden" name="file" value="${f}">
-             <button type="submit">Удалить</button>
-           </form>
-         </li>`;
-      }).join('') + '</ul>'
-    : '<p>Папка пуста</p>';
-  res.send(`<!DOCTYPE html>
+  const tree = listDirHtml(dir);
+  const list = tree ? '<ul class="file-tree">' + tree + '</ul>' : '<p>Папка пуста</p>';
+    res.send(`<!DOCTYPE html>
   <html lang="ru">
   <head>
     <meta charset="UTF-8">
@@ -209,6 +252,10 @@ app.get('/upload', (req, res) => {
         <input type="file" name="files" multiple required>
         <button type="submit" class="btn">Загрузить</button>
       </form>
+        <form method="post" action="/mkdir">
+          <input type="text" name="dir" placeholder="Новая папка" required>
+          <button type="submit" class="btn">Создать папку</button>
+        </form>
     </div>
   </body></html>`);
 });
@@ -228,50 +275,42 @@ app.post('/delete', (req, res) => {
   const dir = path.join(__dirname, 'Объекты');
   const target = path.normalize(path.join(dir, req.body.file || ''));
   if (!target.startsWith(dir)) return res.status(400).send('Некорректный путь');
-  if (fs.existsSync(target)) fs.unlinkSync(target);
+  if (existsSync(target)) {
+    const st = lstatSync(target);
+    if (st.isDirectory()) rmSync(target, { recursive: true, force: true });
+    else rmSync(target);
+  }
   res.redirect('/upload');
 });
 
-// Сохранение изменений НЛСР
-app.post('/api/save-nlsr', (req, res) => {
-  try {
-    const { rows } = req.body;
-    const file = path.join(__dirname, 'combined_output.xlsx');
-    const wb = xlsx.readFile(file);
-    const sheetName = 'GroupedData';
-    const data = xlsx.utils.sheet_to_json(wb.Sheets[sheetName], { defval: '' });
-    rows.forEach(r => {
-      const row = data[r.index];
-      if (row) row['НЛСР группа'] = r.group;
-    });
-    wb.Sheets[sheetName] = xlsx.utils.json_to_sheet(data);
-    xlsx.writeFile(wb, file);
-    res.json({ status: 'ok' });
-  } catch (e) {
-    console.error(e);
-    res.status(500).json({ error: e.message });
-  }
+app.post('/mkdir', (req, res) => {
+  const dir = path.join(__dirname, 'Объекты');
+  const target = path.normalize(path.join(dir, req.body.dir || ''));
+  if (!target.startsWith(dir)) return res.status(400).send('Некорректный путь');
+  mkdirSync(target, { recursive: true });
+  res.redirect('/upload');
 });
 
-// Сохранение изменений TEP
-app.post('/api/save-tep', (req, res) => {
-  try {
-    const { rows } = req.body;
-    const file = path.join(__dirname, 'combined_output.xlsx');
-    const wb = xlsx.readFile(file);
-    const sheetName = 'GroupedData';
-    const data = xlsx.utils.sheet_to_json(wb.Sheets[sheetName], { defval: '' });
-    rows.forEach(r => {
-      const row = data[r.index];
-      if (row) row['TEP'] = r.TEP;
-    });
-    wb.Sheets[sheetName] = xlsx.utils.json_to_sheet(data);
-    xlsx.writeFile(wb, file);
-    res.json({ status: 'ok' });
-  } catch (e) {
-    console.error(e);
-    res.status(500).json({ error: e.message });
-  }
+// API NLSR.xlsx
+app.get('/api/nlsr', (req, res) => {
+  try { res.json(loadNLSR()); }
+  catch(e){ res.status(500).json({ error: e.message }); }
+});
+
+app.post('/api/nlsr', (req, res) => {
+  try { saveNLSR(req.body.rows || []); res.json({ status: 'ok' }); }
+  catch(e){ console.error(e); res.status(500).json({ error: e.message }); }
+});
+
+// API TEP.xlsx
+app.get('/api/tep', (req, res) => {
+  try { res.json(loadTEP()); }
+  catch(e){ res.status(500).json({ error: e.message }); }
+});
+
+app.post('/api/tep', (req, res) => {
+  try { saveTEP(req.body.rows || []); res.json({ status: 'ok' }); }
+  catch(e){ console.error(e); res.status(500).json({ error: e.message }); }
 });
 
 // Выдача готового Excel

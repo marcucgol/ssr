@@ -9,14 +9,14 @@ This project processes `.gge` files into Excel and provides a small web interfac
    npm install
    ```
 2. Prepare the input data:
-   - Place your `.gge` files under `Объекты/`
+   - Place your `.gge` files under `Объекты/` (use the upload page to create folders if needed)
    - Put `NLSR.xlsx` and `TEP.xlsx` in the project root
 3. Start the server
    ```bash
    node app_s.js
    ```
    The web interface will be available at <http://localhost:2500>.
-   Buttons on the main page let you upload new objects, edit NLSR groups or TEP values and download the combined Excel file.
+   Buttons on the main page let you upload new objects, edit `NLSR.xlsx` or `TEP.xlsx`, and download the combined Excel file.
 
 4. **Optional SSH access**
 
