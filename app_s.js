@@ -1,6 +1,7 @@
 const express = require('express');
 const path    = require('path');
 const xlsx    = require('xlsx');
+const { main: generateData } = require('./Itog2');
 
 const app  = express();
 const PORT = 2500;
@@ -20,12 +21,17 @@ const displayNames = {
   Kvadrat:      'Квадрат'
 };
 
-// Читаем Excel
-const workbook  = xlsx.readFile(path.join(__dirname, 'combined_output.xlsx'));
-const sheetName = 'GroupedData';
-if (!workbook.Sheets[sheetName]) throw new Error(`Лист "${sheetName}" не найден`);
-const sheet = workbook.Sheets[sheetName];
-const rows  = xlsx.utils.sheet_to_json(sheet, { defval: '' });
+// Функция чтения данных из Excel
+function loadData() {
+  const workbook  = xlsx.readFile(path.join(__dirname, 'combined_output.xlsx'));
+  const sheetName = 'GroupedData';
+  if (!workbook.Sheets[sheetName]) throw new Error(`Лист "${sheetName}" не найден`);
+  const sheet = workbook.Sheets[sheetName];
+  const rows  = xlsx.utils.sheet_to_json(sheet, { defval: '' });
+  return rows.filter(r =>
+    cols.every(c => (r[c] ?? '').toString().trim() !== '')
+  );
+}
 
 // Все колонки и фильтрация пустых
 const cols = [
@@ -33,9 +39,6 @@ const cols = [
   'Num 1','Num 2','НЛСР группа',
   'Year','Quarter','всего','TEP','Kvadrat'
 ];
-const data = rows.filter(r =>
-  cols.every(c => (r[c] ?? '').toString().trim() !== '')
-);
 
 // Фильтруемые столбцы (без «всего», «TEП», «Kvadrat»)
 const filterCols = cols.filter(c => !['всего','TEP','Kvadrat'].includes(c));
@@ -49,7 +52,24 @@ filterCols.forEach(c => {
 app.use('/static', express.static(path.join(__dirname, 'public')));
 
 // API для данных
-app.get('/data', (req, res) => res.json(data));
+app.get('/data', (req, res) => {
+  try {
+    res.json(loadData());
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// Запуск обработки .gge и обновления Excel
+app.get('/generate', async (req, res) => {
+  try {
+    await generateData();
+    res.json({ status: 'ok' });
+  } catch (e) {
+    console.error(e);
+    res.status(500).json({ error: e.message });
+  }
+});
 
 // Главная страница
 app.get('/', (req, res) => {
@@ -80,6 +100,11 @@ app.get('/', (req, res) => {
       flex: 1; margin: 0 2px; padding: 4px; font-size: 0.9em;
       border: 1px solid #888; background: #eee; border-radius: 3px; cursor: pointer;
     }
+    #generateBtn {
+      margin-left: 10px; padding: 5px 10px;
+      border: 1px solid #888; background: #eee;
+      border-radius: 3px; cursor: pointer;
+    }
     .checkboxes label { display: block; margin-bottom: 3px; }
     .table-wrapper { overflow-x: auto; }
     table { width: 100%; min-width: 1400px; border-collapse: collapse; }
@@ -98,6 +123,7 @@ app.get('/', (req, res) => {
       <div class="stats">
         Среднее ${displayNames.Kvadrat}: <span id="avgKvadrat">0.00</span>
       </div>
+      <button id="generateBtn">Обновить данные</button>
     </div>
     <div class="filters">
       ${Object.entries(keyMap).map(([id,key]) => `
@@ -151,6 +177,9 @@ app.get('/', (req, res) => {
           });
         });
         renderTable();
+      });
+      document.getElementById('generateBtn').addEventListener('click', () => {
+        fetch('/generate').then(r=>r.json()).then(()=>location.reload());
       });
       document.addEventListener('click', e => {
         Object.keys(keyMap).forEach(id => {
