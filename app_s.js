@@ -300,22 +300,26 @@ function listDirList(base, sub = '', view = 'list') {
   if (!existsSync(dir)) return '';
   const entries = readdirSync(dir, { withFileTypes: true })
     .sort((a, b) => a.name.localeCompare(b.name));
-  let html = '<ul class="file-list">';
+  let html = '<table class="file-table"><thead><tr>'+
+             '<th>Имя</th><th>Дата изменения</th><th>Тип</th><th>Размер</th><th></th>'+
+             '</tr></thead><tbody>';
   for (const e of entries) {
     const rel = path.join(sub, e.name);
+    const stats = lstatSync(path.join(dir, e.name));
+    const mtime = new Date(stats.mtimeMs).toLocaleString('ru-RU');
+    const type = e.isDirectory() ? 'Папка' : (path.extname(e.name).slice(1).toUpperCase() || 'Файл');
+    const size = e.isDirectory() ? '' : stats.size;
     const del = `<form method="post" action="/delete" onsubmit="return confirm('Удалить ${esc(rel)}?')">`+
                 `<input type="hidden" name="file" value="${esc(rel)}">`+
                 `<input type="hidden" name="dir" value="${esc(sub)}">`+
                 `<input type="hidden" name="view" value="${esc(view)}">`+
                 `<button type="submit">Удалить</button></form>`;
-    if (e.isDirectory()) {
-      html += `<li class="folder"><a href="/upload?dir=${encodeURIComponent(rel)}&view=${view}">📁 ${esc(e.name)}</a> ${del}</li>`;
-    } else {
-      const ext = path.extname(e.name).slice(1).toLowerCase();
-      html += `<li class="file" data-ext="${esc(ext)}">📄 ${esc(e.name)} ${del}</li>`;
-    }
+    const name = e.isDirectory()
+      ? `<a href="/upload?dir=${encodeURIComponent(rel)}&view=${view}">📁 ${esc(e.name)}</a>`
+      : `📄 ${esc(e.name)}`;
+    html += `<tr><td>${name}</td><td>${mtime}</td><td>${esc(type)}</td><td>${size}</td><td>${del}</td></tr>`;
   }
-  html += '</ul>';
+  html += '</tbody></table>';
   return html;
 }
 

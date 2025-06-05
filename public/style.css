@@ -58,3 +58,8 @@ td[contenteditable] { background: #fffdd0; min-width: 80px; }
   padding: 0 2px;
   border-radius: 2px;
 }
+
+/* Explorer table */
+.file-table { width: 100%; border-collapse: collapse; margin-bottom: 15px; }
+.file-table th, .file-table td { border: 1px solid #ddd; padding: 4px; text-align: left; }
+.file-table th { background: #4CAF50; color: #fff; }
