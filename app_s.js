@@ -161,7 +161,6 @@ app.get('/edit-tep', (req, res) => {
     </script>
   </body></html>`);
 });
-
 // Рекурсивный список файлов в папке
 function listFiles(dir, prefix = '') {
   if (!fs.existsSync(dir)) return [];
@@ -208,6 +207,20 @@ app.get('/upload', (req, res) => {
         <button type="submit" class="btn">Загрузить</button>
       </form>
     </div>
+  const list = files.length ? '<ul>' + files.map(f => `<li>${f}</li>`).join('') + '</ul>'
+                             : '<p>Папка пуста</p>';
+  res.send(`<!DOCTYPE html>
+  <html lang="ru">
+  <head><meta charset="UTF-8"><title>Загрузка объектов</title></head>
+  <body>
+    <h1>Добавить объекты</h1>
+    <h3>Содержимое папки "Объекты"</h3>
+    ${list}
+    <form method="post" enctype="multipart/form-data">
+      <input type="file" name="files" multiple required>
+      <button type="submit">Загрузить</button>
+    </form>
+    <p><a href="/">Назад</a></p>
   </body></html>`);
 });
 
@@ -232,6 +245,11 @@ app.post('/delete', (req, res) => {
 
 // Сохранение изменений НЛСР
 app.post('/api/save-nlsr', (req, res) => {
+  res.send('Файлы загружены. <a href="/">На главную</a>');
+});
+
+// Сохранение изменений группы и ТЭП
+app.post('/api/save', (req, res) => {
   try {
     const { rows } = req.body;
     const file = path.join(__dirname, 'combined_output.xlsx');
@@ -262,6 +280,10 @@ app.post('/api/save-tep', (req, res) => {
     rows.forEach(r => {
       const row = data[r.index];
       if (row) row['TEP'] = r.TEP;
+      if (row) {
+        row['НЛСР группа'] = r.group;
+        row['TEP'] = r.TEP;
+      }
     });
     wb.Sheets[sheetName] = xlsx.utils.json_to_sheet(data);
     xlsx.writeFile(wb, file);
@@ -275,6 +297,45 @@ app.post('/api/save-tep', (req, res) => {
 // Выдача готового Excel
 app.get('/combined', (req, res) => {
   res.download(path.join(__dirname, 'combined_output.xlsx'));
+});
+
+// Страница редактирования групп и ТЭП
+app.get('/edit', (req, res) => {
+  res.send(`<!DOCTYPE html>
+  <html lang="ru">
+  <head><meta charset="UTF-8"><title>Редактор данных</title></head>
+  <body>
+    <h1>Правка групп и ТЭП</h1>
+    <table border="1" id="editTable"></table>
+    <button id="saveBtn">Сохранить</button>
+    <p><a href="/">Назад</a></p>
+    <script>
+      let data=[];
+      fetch('/data').then(r=>r.json()).then(json=>{
+        data=json;
+        const table=document.getElementById('editTable');
+        table.innerHTML='<tr><th>#</th><th>Название</th><th>Доп.</th><th>Группа</th><th>ТЭП</th></tr>';
+        json.forEach((row,i)=>{
+          const tr=document.createElement('tr');
+          tr.dataset.index=i;
+          tr.innerHTML=\`<td>\${i+1}</td><td>\${row.Name}</td><td>\${row.Name2}</td>
+            <td><input value="\${row['НЛСР группа']||''}"></td>
+            <td><input value="\${row.TEP||''}"></td>\`;
+          table.appendChild(tr);
+        });
+      });
+      document.getElementById('saveBtn').onclick=()=>{
+        const rows=[];
+        document.querySelectorAll('#editTable tr[data-index]').forEach(tr=>{
+          rows.push({index:Number(tr.dataset.index),
+            group:tr.children[3].firstChild.value,
+            TEP:tr.children[4].firstChild.value});
+        });
+        fetch('/api/save',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({rows})})
+          .then(r=>r.json()).then(()=>alert('Сохранено'));
+      };
+    </script>
+  </body></html>`);
 });
 
 // Главная страница
@@ -338,6 +399,7 @@ app.get('/', (req, res) => {
       <a class="btn" href="/upload">Добавить объекты</a>
       <a class="btn" href="/edit-nlsr">Править NLSR</a>
       <a class="btn" href="/edit-tep">Править TEP</a>
+      <a class="btn" href="/edit">Править данные</a>
       <a class="btn" href="/combined">Скачать Excel</a>
     </div>
     <div class="filters">
