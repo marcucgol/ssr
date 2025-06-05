@@ -19,3 +19,41 @@ tr:nth-child(even) { background: #f9f9f9; }
 .file-tree .folder::before { content: '\25B6'; display: inline-block; width: 1em; }
 .file-tree .folder.open::before { content: '\25BC'; }
 td[contenteditable] { background: #fffdd0; min-width: 80px; }
+
+/* Explorer grid */
+.file-grid {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  padding: 0;
+  list-style: none;
+}
+.file-grid .item {
+  width: 90px;
+  text-align: center;
+  border: 1px solid #ccc;
+  border-radius: 4px;
+  padding: 6px;
+  position: relative;
+  background: #fafafa;
+}
+.file-grid .icon {
+  font-size: 40px;
+  line-height: 40px;
+}
+.file-grid .name {
+  margin-top: 5px;
+  font-size: 12px;
+  word-break: break-word;
+}
+.file-grid .item.file::after {
+  content: attr(data-ext);
+  position: absolute;
+  bottom: 2px;
+  right: 4px;
+  font-size: 10px;
+  color: #555;
+  background: #fff;
+  padding: 0 2px;
+  border-radius: 2px;
+}
