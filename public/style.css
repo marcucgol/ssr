@@ -2,7 +2,7 @@ body { background: #f0f2f5; margin: 0; padding: 20px; font-family: Arial, sans-s
 .container { background: #fff; padding: 20px; border-radius: 8px; max-width: 1600px; margin: auto; box-shadow: 0 2px 8px rgba(0,0,0,0.1); }
 .header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px; }
 .header h1 { margin: 0; }
-.btn { margin-left: 10px; padding: 5px 10px; border: 1px solid #888; background: #eee; border-radius: 3px; text-decoration: none; color: #000; }
+.btn { margin-left:10px; padding:6px 14px; background:#28a745; color:#fff; border:1px solid #28a745; border-radius:20px; text-decoration:none; }
 .table-wrapper {
   overflow: auto;
   max-height: 80vh;
@@ -61,10 +61,7 @@ td[contenteditable] { background: #fffdd0; min-width: 80px; }
   position: relative;
   background: #fafafa;
 }
-.file-grid .icon {
-  font-size: 40px;
-  line-height: 40px;
-}
+.file-grid .icon {width:48px; height:38px; margin:auto; background-size:contain; background-repeat:no-repeat;}
 .file-grid .name {
   margin-top: 5px;
   font-size: 12px;
@@ -117,3 +114,7 @@ td[contenteditable] { background: #fffdd0; min-width: 80px; }
 .resizing {
   cursor: col-resize;
 }
+.folder-icon{background-image:url("/static/folder.svg");}
+.file-icon{background-image:url("/static/file.svg");}
+
+.icon-sm{display:inline-block;width:20px;height:16px;margin-right:4px;background-size:contain;background-repeat:no-repeat;vertical-align:middle;}

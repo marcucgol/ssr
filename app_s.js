@@ -309,13 +309,13 @@ function listDirGrid(base, sub = '', view = 'grid') {
                 `<button type="submit">Удалить</button></form>`;
     if (e.isDirectory()) {
       html += `<div class="item folder">`+
-              `<a href="/upload?dir=${encodeURIComponent(rel)}&view=${view}" class="icon">📁</a>`+
+              `<a href="/upload?dir=${encodeURIComponent(rel)}&view=${view}" class="icon folder-icon"></a>`+
               `<div class="name">${esc(e.name)}</div>`+
               `${del}</div>`;
     } else {
       const ext = path.extname(e.name).slice(1).toLowerCase();
       html += `<div class="item file" data-ext="${esc(ext)}">`+
-              `<div class="icon">📄</div>`+
+              `<div class="icon file-icon"></div>`+
               `<div class="name">${esc(e.name)}</div>`+
               `${del}</div>`;
     }
@@ -344,8 +344,8 @@ function listDirList(base, sub = '', view = 'list') {
                 `<input type="hidden" name="view" value="${esc(view)}">`+
                 `<button type="submit">Удалить</button></form>`;
     const name = e.isDirectory()
-      ? `<a href="/upload?dir=${encodeURIComponent(rel)}&view=${view}">📁 ${esc(e.name)}</a>`
-      : `📄 ${esc(e.name)}`;
+      ? `<a href="/upload?dir=${encodeURIComponent(rel)}&view=${view}"><span class="icon-sm folder-icon"></span>${esc(e.name)}</a>`
+      : `<span class="icon-sm file-icon"></span>${esc(e.name)}`;
     html += `<tr><td>${name}</td><td>${mtime}</td><td>${esc(type)}</td><td>${size}</td><td>${del}</td></tr>`;
   }
   html += '</tbody></table>';
@@ -619,16 +619,8 @@ app.get('/', (req, res) => {
       flex: 1; margin: 0 2px; padding: 4px; font-size: 0.9em;
       border: 1px solid #888; background: #eee; border-radius: 3px; cursor: pointer;
     }
-    #generateBtn {
-      margin-left: 10px; padding: 5px 10px;
-      border: 1px solid #888; background: #eee;
-      border-radius: 3px; cursor: pointer;
-    }
-    .btn {
-      margin-left: 10px; padding: 5px 10px;
-      border: 1px solid #888; background: #eee;
-      border-radius: 3px; text-decoration: none; color: #000;
-    }
+    #generateBtn { margin-left:10px; padding:6px 14px; background:#28a745; color:#fff; border:1px solid #28a745; border-radius:20px; cursor:pointer; }
+    .btn { margin-left:10px; padding:6px 14px; background:#28a745; color:#fff; border:1px solid #28a745; border-radius:20px; text-decoration:none; }
     .checkboxes label { display: block; margin-bottom: 3px; }
     .table-wrapper { overflow-x: auto; }
     table { width: 100%; min-width: 1400px; border-collapse: collapse; }
