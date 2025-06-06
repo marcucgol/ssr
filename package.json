@@ -14,7 +14,6 @@
     "exceljs": "^4.4.0",
     "express": "^5.1.0",
     "express-fileupload": "^1.4.0",
-    "ssh2": "^1.16.0",
     "xlsx": "^0.18.5",
     "xml2js": "^0.6.2"
   }

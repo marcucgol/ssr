@@ -6,9 +6,7 @@ const { rmSync, mkdirSync, existsSync, readdirSync, lstatSync } = fs;
 const xlsx    = require('xlsx');
 const fileUpload = require('express-fileupload');
 const { main: generateData } = require('./Itog2');
-const { Server: SSHServer } = require('ssh2');
-const { spawn, exec } = require('child_process');
-const { generateKeyPairSync } = require('crypto');
+const { exec } = require('child_process');
 
 const app  = express();
 const PORT = 2500;
@@ -640,6 +638,7 @@ app.get('/', (req, res) => {
         Среднее ${displayNames.Kvadrat}: <span id="avgKvadrat">0.00</span>
       </div>
       <button id="generateBtn">Обновить данные</button>
+      <span id="status" class="status"></span>
       <a class="btn" href="/upload">Добавить объекты</a>
       <a class="btn" href="/edit-nlsr">Править NLSR</a>
       <a class="btn" href="/edit-tep">Править TEP</a>
@@ -703,8 +702,26 @@ app.get('/', (req, res) => {
         });
         renderTable();
       });
-      document.getElementById('generateBtn').addEventListener('click', () => {
-        fetch('/generate').then(r=>r.json()).then(()=>location.reload());
+      const statusEl = document.getElementById('status');
+      const genBtn = document.getElementById('generateBtn');
+      genBtn.addEventListener('click', () => {
+        genBtn.disabled = true;
+        statusEl.textContent = 'Идёт обновление...';
+        fetch('/generate')
+          .then(r => r.json())
+          .then(res => {
+            if (res.error) {
+              statusEl.textContent = 'Ошибка: ' + res.error;
+            } else {
+              statusEl.textContent = 'Обновление завершено. Перезагрузите страницу';
+            }
+          })
+          .catch(err => {
+            statusEl.textContent = 'Ошибка: ' + err.message;
+          })
+          .finally(() => {
+            genBtn.disabled = false;
+          });
       });
       document.addEventListener('click', e => {
         Object.keys(keyMap).forEach(id => {
@@ -796,33 +813,3 @@ app.listen(PORT, () => {
   console.log('Server запущен: http://localhost:' + PORT);
 });
 
-// --- SSH Server -----------------------------------------------------------
-function startSSH() {
-  const { privateKey } = generateKeyPairSync('rsa', { modulusLength: 2048 });
-  const hostKey = privateKey.export({ type: 'pkcs1', format: 'pem' });
-  const ssh = new SSHServer({ hostKeys: [hostKey] }, client => {
-    client.on('authentication', ctx => {
-      if (ctx.method === 'password' && ctx.username === 'user' && ctx.password === 'pass')
-        ctx.accept();
-      else ctx.reject();
-    }).on('ready', () => {
-      client.on('session', accept => {
-        const session = accept();
-        session.once('shell', acceptShell => {
-          const stream = acceptShell();
-          const shellCmd = process.platform === 'win32' ? 'cmd.exe' : '/bin/sh';
-          const shell = spawn(shellCmd, [], { env: process.env });
-          stream.on('data', d => shell.stdin.write(d));
-          shell.stdout.on('data', d => stream.write(d));
-          shell.stderr.on('data', d => stream.write(d));
-          shell.on('exit', () => client.end());
-        });
-      });
-    });
-  });
-  ssh.listen(2222, '0.0.0.0', () => {
-    console.log('SSH сервер слушает порт 2222 (логин: user, пароль: pass)');
-  });
-}
-
-startSSH();

@@ -3,6 +3,7 @@ body { background: #f0f2f5; margin: 0; padding: 20px; font-family: Arial, sans-s
 .header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px; }
 .header h1 { margin: 0; }
 .btn { margin-left:10px; padding:6px 14px; background:#28a745; color:#fff; border:1px solid #28a745; border-radius:20px; text-decoration:none; }
+.status { margin-left:10px; font-style:italic; color:#555; }
 .table-wrapper {
   overflow: auto;
   max-height: 80vh;
