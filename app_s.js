@@ -519,12 +519,20 @@ app.get('/view-combined', (req, res) => {
     </div>
     <script>
       const zoomInput = document.getElementById('zoom');
-      const zoomVal = document.getElementById('zoomVal');
-      zoomInput.addEventListener('input', () => {
-        const z = zoomInput.value;
-        document.querySelector('.table-wrapper').style.zoom = z + '%';
-        zoomVal.textContent = z + '%';
-      });
+      const zoomVal   = document.getElementById('zoomVal');
+      const wrapper   = document.querySelector('.table-wrapper');
+      const table     = wrapper.querySelector('table');
+      const baseW = table.offsetWidth;
+      const baseH = table.offsetHeight;
+      function applyZoom() {
+        const scale = zoomInput.value / 100;
+        table.style.transform = 'scale(' + scale + ')';
+        wrapper.style.width  = (baseW * scale) + 'px';
+        wrapper.style.height = (baseH * scale) + 'px';
+        zoomVal.textContent = zoomInput.value + '%';
+      }
+      zoomInput.addEventListener('input', applyZoom);
+      applyZoom();
     </script>
   </body></html>`);
 });

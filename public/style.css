@@ -71,4 +71,13 @@ td[contenteditable] { background: #fffdd0; min-width: 80px; }
   display: flex;
   align-items: center;
   gap: 8px;
+  position: sticky;
+  top: 0;
+  background: #fff;
+  padding: 5px 0;
+  z-index: 10;
+}
+
+.table-wrapper table {
+  transform-origin: top left;
 }
