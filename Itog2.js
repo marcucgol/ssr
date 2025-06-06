@@ -1,3 +1,4 @@
+'use strict';
 const fs = require('fs');
 const path = require('path');
 const xml2js = require('xml2js');
@@ -236,6 +237,7 @@ function extractObjectName(sheet) {
 }
 
 function loadNLSRMapping() {
+  if (!fs.existsSync('NLSR.xlsx')) return [];
   const wb = XLSX.readFile('NLSR.xlsx');
   const sh = wb.Sheets[wb.SheetNames[0]];
   const data = XLSX.utils.sheet_to_json(sh, { header: 1, defval: "" });
@@ -252,6 +254,7 @@ function loadNLSRMapping() {
 }
 
 function loadTEPMapping() {
+  if (!fs.existsSync('TEP.xlsx')) return {};
   const wb = XLSX.readFile('TEP.xlsx');
   const sh = wb.Sheets[wb.SheetNames[0]];
   const rows = XLSX.utils.sheet_to_json(sh, { defval: "" });
@@ -442,4 +445,16 @@ async function main() {
   console.log('Создан combined_output.xlsx');
 }
 
-main().catch(err => console.error('Ошибка выполнения:', err));
+async function run() {
+  try {
+    await main();
+  } catch (err) {
+    console.error('Ошибка выполнения:', err);
+  }
+}
+
+if (require.main === module) {
+  run();
+}
+
+module.exports = { main };
