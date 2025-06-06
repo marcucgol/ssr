@@ -64,3 +64,11 @@ td[contenteditable] { background: #fffdd0; min-width: 80px; }
 .file-table { width: 100%; border-collapse: collapse; margin-bottom: 15px; }
 .file-table th, .file-table td { border: 1px solid #ddd; padding: 4px; text-align: left; }
 .file-table th { background: #4CAF50; color: #fff; }
+
+/* Zoom controls */
+.zoom-controls {
+  margin-bottom: 10px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}

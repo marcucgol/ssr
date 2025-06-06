@@ -506,6 +506,10 @@ app.get('/view-combined', (req, res) => {
         <a class="btn" href="/">На главную</a>
         <a class="btn" href="/combined">Скачать</a>
       </div>
+      <div class="zoom-controls">Масштаб:
+        <input type="range" id="zoom" min="50" max="150" value="100">
+        <span id="zoomVal">100%</span>
+      </div>
       <div class="table-wrapper wide">
         <table class="table">
           <thead><tr>${head}</tr></thead>
@@ -513,6 +517,15 @@ app.get('/view-combined', (req, res) => {
         </table>
       </div>
     </div>
+    <script>
+      const zoomInput = document.getElementById('zoom');
+      const zoomVal = document.getElementById('zoomVal');
+      zoomInput.addEventListener('input', () => {
+        const z = zoomInput.value;
+        document.querySelector('.table-wrapper').style.zoom = z + '%';
+        zoomVal.textContent = z + '%';
+      });
+    </script>
   </body></html>`);
 });
 
