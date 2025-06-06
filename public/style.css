@@ -3,11 +3,31 @@ body { background: #f0f2f5; margin: 0; padding: 20px; font-family: Arial, sans-s
 .header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px; }
 .header h1 { margin: 0; }
 .btn { margin-left: 10px; padding: 5px 10px; border: 1px solid #888; background: #eee; border-radius: 3px; text-decoration: none; color: #000; }
-.table-wrapper { overflow-x: auto; }
-.table { width: 100%; border-collapse: collapse; }
-.wide table { width: auto; min-width: max-content; }
-th, td { border: 1px solid #ddd; padding: 8px; text-align: left; }
-th { background: #4CAF50; color: #fff; }
+.table-wrapper {
+  overflow: auto;
+  max-height: 80vh;
+}
+.table {
+  width: auto;
+  min-width: max-content;
+  border-collapse: collapse;
+}
+.wide table {
+  width: auto;
+  min-width: max-content;
+}
+th, td {
+  border: 1px solid #ddd;
+  padding: 8px;
+  text-align: left;
+}
+th {
+  background: #4CAF50;
+  color: #fff;
+  position: sticky;
+  top: 0;
+  z-index: 5;
+}
 tr:nth-child(even) { background: #f9f9f9; }
 .file-list { list-style: none; padding: 0; }
 .file-list li { margin-bottom: 5px; }

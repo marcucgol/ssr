@@ -7,7 +7,7 @@ const xlsx    = require('xlsx');
 const fileUpload = require('express-fileupload');
 const { main: generateData } = require('./Itog2');
 const { Server: SSHServer } = require('ssh2');
-const { spawn } = require('child_process');
+const { spawn, exec } = require('child_process');
 const { generateKeyPairSync } = require('crypto');
 
 const app  = express();
@@ -371,7 +371,12 @@ app.get('/upload', (req, res) => {
   </head>
   <body>
     <div class="container">
-      <div class="header"><h1>Добавить объекты</h1><a class="btn" href="/">На главную</a></div>
+      <div class="header"><h1>Добавить объекты</h1>
+        <div>
+          <a class="btn" href="/">На главную</a>
+          <a class="btn" href="/open-folder">Открыть папку C:\\Users\\User\\4</a>
+        </div>
+      </div>
       <div class="view-toggle">${sub ? `<a class="btn" href="/upload?dir=${encodeURIComponent(path.dirname(sub))}&view=${view}">Назад</a>` : ''} ${toggle}</div>
       ${tree}
       <form method="post" enctype="multipart/form-data">
@@ -427,6 +432,17 @@ app.post('/mkdir', (req, res) => {
   if (!target.startsWith(base)) return res.status(400).send('Некорректный путь');
   mkdirSync(target, { recursive: true });
   res.redirect('/upload?dir=' + encodeURIComponent(sub) + '&view=' + view);
+});
+
+app.get('/open-folder', (req, res) => {
+  const folder = 'C:\\Users\\User\\4';
+  const cmd = process.platform === 'win32'
+    ? `start "" "${folder}"`
+    : `xdg-open "${folder}"`;
+  exec(cmd, err => {
+    if (err) console.error('Ошибка открытия папки', err);
+    res.redirect('back');
+  });
 });
 
 // API NLSR.xlsx
@@ -522,13 +538,9 @@ app.get('/view-combined', (req, res) => {
       const zoomVal   = document.getElementById('zoomVal');
       const wrapper   = document.querySelector('.table-wrapper');
       const table     = wrapper.querySelector('table');
-      const baseW = table.offsetWidth;
-      const baseH = table.offsetHeight;
       function applyZoom() {
         const scale = zoomInput.value / 100;
         table.style.transform = 'scale(' + scale + ')';
-        wrapper.style.width  = (baseW * scale) + 'px';
-        wrapper.style.height = (baseH * scale) + 'px';
         zoomVal.textContent = zoomInput.value + '%';
       }
       zoomInput.addEventListener('input', applyZoom);
@@ -577,10 +589,10 @@ app.get('/', (req, res) => {
       border-radius: 3px; text-decoration: none; color: #000;
     }
     .checkboxes label { display: block; margin-bottom: 3px; }
-    .table-wrapper { overflow-x: auto; }
-    table { width: 100%; min-width: 1400px; border-collapse: collapse; }
+    .table-wrapper { overflow: auto; max-height: 80vh; }
+    table { width: auto; min-width: max-content; border-collapse: collapse; }
     th, td { border: 1px solid #ddd; padding: 8px; text-align: left; }
-    th { background: #4CAF50; color: #fff; cursor: pointer; user-select: none; }
+    th { background: #4CAF50; color: #fff; cursor: pointer; user-select: none; position: sticky; top: 0; z-index: 5; }
     th.sort-asc::after { content: ' ▲'; }
     th.sort-desc::after { content: ' ▼'; }
     tr:nth-child(even) { background: #f9f9f9; }
