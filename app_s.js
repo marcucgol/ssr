@@ -505,7 +505,9 @@ app.get('/view-combined', (req, res) => {
   const rows = loadCombined();
   if (!rows.length) return res.send('<p>Файл combined_output.xlsx не найден</p>');
   const headers = Object.keys(rows[0]);
-  const head = headers.map(h => `<th>${esc(h)}</th>`).join('');
+  const head = headers.map(h =>
+    `<th data-col="${esc(h)}"><span>${esc(h)}</span><div class="resizer"></div></th>`
+  ).join('');
   const body = rows.map(r =>
     `<tr>${headers.map(h => `<td>${esc(r[h])}</td>`).join('')}</tr>`
   ).join('');
@@ -545,6 +547,45 @@ app.get('/view-combined', (req, res) => {
       }
       zoomInput.addEventListener('input', applyZoom);
       applyZoom();
+
+      const headers = Array.from(table.querySelectorAll('th'));
+      const widths = JSON.parse(localStorage.getItem('combinedColWidths') || '{}');
+      headers.forEach((th, i) => {
+        const name = th.dataset.col;
+        const stored = widths[name];
+        if (stored) {
+          th.style.width = stored + 'px';
+          table.querySelectorAll('tbody tr').forEach(tr => {
+            const td = tr.children[i];
+            if (td) td.style.width = stored + 'px';
+          });
+        }
+        const resizer = th.querySelector('.resizer');
+        let startX, startW;
+        resizer.addEventListener('mousedown', e => {
+          document.body.classList.add('resizing');
+          startX = e.clientX;
+          startW = th.offsetWidth;
+          function onMove(ev) {
+            const w = Math.max(40, startW + ev.clientX - startX);
+            th.style.width = w + 'px';
+            table.querySelectorAll('tbody tr').forEach(tr => {
+              const td = tr.children[i];
+              if (td) td.style.width = w + 'px';
+            });
+          }
+          function onUp(ev) {
+            document.body.classList.remove('resizing');
+            document.removeEventListener('mousemove', onMove);
+            document.removeEventListener('mouseup', onUp);
+            const w = th.offsetWidth;
+            widths[name] = w;
+            localStorage.setItem('combinedColWidths', JSON.stringify(widths));
+          }
+          document.addEventListener('mousemove', onMove);
+          document.addEventListener('mouseup', onUp);
+        });
+      });
     </script>
   </body></html>`);
 });

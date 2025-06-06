@@ -27,6 +27,8 @@ th {
   position: sticky;
   top: 0;
   z-index: 5;
+  user-select: none;
+  padding-right: 6px; /* space for resizer */
 }
 tr:nth-child(even) { background: #f9f9f9; }
 .file-list { list-style: none; padding: 0; }
@@ -100,4 +102,18 @@ td[contenteditable] { background: #fffdd0; min-width: 80px; }
 
 .table-wrapper table {
   transform-origin: top left;
+}
+
+.resizer {
+  position: absolute;
+  top: 0;
+  right: 0;
+  width: 5px;
+  height: 100%;
+  cursor: col-resize;
+  user-select: none;
+}
+
+.resizing {
+  cursor: col-resize;
 }
