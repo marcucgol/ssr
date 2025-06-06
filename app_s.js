@@ -589,10 +589,10 @@ app.get('/', (req, res) => {
       border-radius: 3px; text-decoration: none; color: #000;
     }
     .checkboxes label { display: block; margin-bottom: 3px; }
-    .table-wrapper { overflow: auto; max-height: 80vh; }
-    table { width: auto; min-width: max-content; border-collapse: collapse; }
+    .table-wrapper { overflow-x: auto; }
+    table { width: 100%; min-width: 1400px; border-collapse: collapse; }
     th, td { border: 1px solid #ddd; padding: 8px; text-align: left; }
-    th { background: #4CAF50; color: #fff; cursor: pointer; user-select: none; position: sticky; top: 0; z-index: 5; }
+    th { background: #4CAF50; color: #fff; cursor: pointer; user-select: none; position: static; }
     th.sort-asc::after { content: ' ▲'; }
     th.sort-desc::after { content: ' ▼'; }
     tr:nth-child(even) { background: #f9f9f9; }
