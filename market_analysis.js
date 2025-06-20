@@ -138,17 +138,21 @@ function loadCandles(txtPath) {
 
     let BTC1mPct='', BTC5mPct='', BTC10mPct='', BTC15mPct='', BTC30mPct='';
     if(btcBars.length){
-      const sig = new Date(row.Time); sig.setSeconds(0,0);
-      const iso0 = sig.toISOString().slice(0,19)+'Z';
-      const idx = btcBars.findIndex(b=>b.iso===iso0);
-      if(idx>=0){
-        const nowClose = btcBars[idx].close;
-        const calc = (now, prev) => (prev>0? round5((now-prev)/prev*100): '');
-        BTC1mPct  = idx>=1  ? calc(nowClose, btcBars[idx-1].close)  : '';
-        BTC5mPct  = idx>=5  ? calc(nowClose, btcBars[idx-5].close)  : '';
-        BTC10mPct = idx>=10 ? calc(nowClose, btcBars[idx-10].close) : '';
-        BTC15mPct = idx>=15 ? calc(nowClose, btcBars[idx-15].close) : '';
-        BTC30mPct = idx>=30 ? calc(nowClose, btcBars[idx-30].close) : '';
+      // use the entry candle time when available
+      const ref = EntryTime || row.Time;
+      if(ref){
+        const sig = new Date(ref); sig.setSeconds(0,0);
+        const iso0 = sig.toISOString().slice(0,19)+'Z';
+        const idx = btcBars.findIndex(b=>b.iso===iso0);
+        if(idx>=0){
+          const nowClose = btcBars[idx].close;
+          const calc = (now, prev) => (prev>0? round5((now-prev)/prev*100): '');
+          BTC1mPct  = idx>=1  ? calc(nowClose, btcBars[idx-1].close)  : '';
+          BTC5mPct  = idx>=5  ? calc(nowClose, btcBars[idx-5].close)  : '';
+          BTC10mPct = idx>=10 ? calc(nowClose, btcBars[idx-10].close) : '';
+          BTC15mPct = idx>=15 ? calc(nowClose, btcBars[idx-15].close) : '';
+          BTC30mPct = idx>=30 ? calc(nowClose, btcBars[idx-30].close) : '';
+        }
       }
     }
 
