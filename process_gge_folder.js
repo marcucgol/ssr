@@ -164,8 +164,21 @@ async function processFile(filePath) {
   function computeItog(prefix) {
     const F = flatSummary;
     const num = key => parseFloat(F[`${key}_${prefix}`]) || 0;
-    const M = num('Materials_Total');
-    const K = num('Totals_Items');
+    const alt = (...keys) => {
+      for (const k of keys) {
+        const v = parseFloat(F[k]);
+        if (!isNaN(v)) return v;
+      }
+      return 0;
+    };
+    const isCur = prefix === 'PriceCurrent';
+    const M = alt(`Materials_Total_${prefix}`,
+                  `Materials_${prefix}_Total`,
+                  `${prefix}_Materials_Total`,
+                  'Materials_Total');
+    const K = alt(isCur ? 'Totals_Current_Items' : 'Totals_Base_Items',
+                  `Totals_Items_${prefix}`,
+                  'Totals_Items');
     const SNB = M - K;
     const P = num('Transport');
     const FT = num('Salary');
