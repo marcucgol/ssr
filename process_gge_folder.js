@@ -204,14 +204,14 @@ async function processFile(filePath) {
   const itogB = computeItog('PriceBase');
 
   [
-    ['Building', 'Строительные работы'],
-    ['Mounting', 'Монтажные работы'],
-    ['Equipment', 'Оборудование'],
-    ['Total', 'Смета Total']
-  ].forEach(([blk, label]) => {
+    ['Building',    'Строительные работы', 'Total_PriceCurrent'],
+    ['Mounting',    'Монтажные работы',   'Total_PriceCurrent'],
+    ['Equipment',   'Оборудование',       'Total_PriceCurrent'],
+    ['OtherTotal',  'Прочие',             'PriceCurrent'],
+    ['Total',       'Смета Total',        'PriceCurrent']
+  ].forEach(([blk, label, prop]) => {
     const data = flatBlocks[blk] || {};
-    const curKey = blk === 'Total' ? 'PriceCurrent' : 'Total_PriceCurrent';
-    itogC[label] = (parseFloat(data[curKey]) || 0).toFixed(2);
+    itogC[label] = (parseFloat(data[prop]) || 0).toFixed(2);
   });
 
   itogC['Итого по смете'] = (
@@ -248,7 +248,7 @@ async function processFile(filePath) {
     'FileNum', 'FileName', 'ObjectNum', 'ObjectName', 'RegionCode', 'RegionName',
     'EstNum', 'EstName', 'EstType', 'IndexType', 'Reason', 'CurYear', 'CurMonth', 'CurQuarter',
     'Материалы', 'КАЦ', 'СНБ', 'Перевозка', 'ФОТ', 'ЭММ', 'Прямые затраты', 'НР', 'СР',
-    'Косвенные затраты', 'Строительные работы', 'Монтажные работы', 'Оборудование',
+    'Косвенные затраты', 'Строительные работы', 'Монтажные работы', 'Оборудование', 'Прочие',
     'Смета Total', 'Итого по смете'
   ];
   const lsrRow = {};
