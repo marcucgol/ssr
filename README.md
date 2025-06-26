@@ -29,3 +29,7 @@ This project processes `.gge` files into Excel and provides a small web interfac
 ## Generating Data
 
 Use the "Обновить данные" button on the main page or send a GET request to `/generate` to reprocess the `.gge` files and refresh `combined_output.xlsx`.
+
+## Command line conversion
+
+Run `node gge_to_excel.js <inputDir> <outputDir>` to convert all `.gge` files from `inputDir` to Excel files in `outputDir`. The script also creates `LSR_Cur_All.xlsx` in the project root summarizing data from every file.
